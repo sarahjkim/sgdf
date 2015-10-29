@@ -1,0 +1,14 @@
+#!/usr/bin/env python2.7
+
+import sys
+from os.path import dirname, exists, join
+
+assert "sgdf" not in sys.modules, "SGDF library already loaded?"
+if exists(join(dirname(dirname(__file__)), "sgdf")):
+    # Add the project root to the module path, if running in project context
+    sys.path.insert(0, dirname(dirname(__file__)))
+from sgdf.cli import main
+
+
+if __name__ == "__main__":
+    main()

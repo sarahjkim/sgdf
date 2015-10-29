@@ -1,0 +1,23 @@
+# Garbage files
+.DS_Store
+.DS_Store?
+.Spotlight-V100
+.Trashes
+._*
+Icon
+Thumbs.db
+ehthumbs.db
+*.swp
+*.swo
+*.orig
+*~
+\#*\#
+/tags
+
+# Project-specific
+/env
+/build
+/dist
+*.egg-info
+*.pyc
+.eggs
