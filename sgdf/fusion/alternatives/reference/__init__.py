@@ -2,6 +2,7 @@ import numpy as np
 from scipy.sparse import diags
 from scipy.sparse import vstack
 from scipy.sparse.linalg import lsqr
+from sgdf.benchmarking import log_timer
 from sgdf.fusion import BaseFusion
 
 
@@ -15,30 +16,40 @@ class ReferenceFusion(BaseFusion):
 
         """
         self.canvas = None
+        self.active = False
         self.active_source = None
         self.active_mask = None
         self.active_displacement = None
 
-    def set_target_image(self, ndarray):
+    def set_image(self, ndarray):
         self.canvas = np.copy(ndarray)
 
     def update_blend(self, source_ndarray, mask_ndarray, displacement):
+        self.active = True
         self.active_source = source_ndarray
         self.active_mask = mask_ndarray
         self.active_displacement = displacement
 
     def commit_blend(self):
         self.canvas = self.get_fusion()
+        self.active = False
 
     def get_fusion(self):
-        # TODO is this inefficient? OH WELL
-        target = np.copy(self.canvas)
-        source_height, source_width, _ = self.active_source.shape
-        mask_y, mask_x = self.active_displacement
-        tinyt = target[mask_y:mask_y + source_height,
-                       mask_x:mask_x + source_width, :]
-        return self.poisson_blend(self.active_source, self.active_mask, tinyt, target,
-                                  self.active_displacement)
+        with log_timer("ReferenceFusion.get_fusion"):
+            # TODO is this inefficient? OH WELL
+            target = np.copy(self.canvas)
+            if not self.active:
+                return target
+            source_height, source_width, _ = self.active_source.shape
+            mask_y, mask_x = self.active_displacement
+            tinyt = target[mask_y:mask_y + source_height,
+                           mask_x:mask_x + source_width, :]
+            for channel in range(3):
+                solution = self.poisson_blend(self.active_source[:, :, channel], self.active_mask,
+                                              tinyt[:, :, channel], target[:, :, channel],
+                                              self.active_displacement)
+                target[:, :, channel] = solution
+            return target
 
     def shift(self, m, direction):
         padded = np.pad(m, [(d, 0) if d > 0 else (0, -d) for d in direction], mode='constant')

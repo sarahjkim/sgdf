@@ -1,10 +1,12 @@
 import logging
 import matplotlib.pyplot as plt
+import numpy as np
 import Tkinter as tk
 import tkFileDialog as filedialog
 from collections import OrderedDict
 from PIL import Image, ImageTk
 from sgdf.benchmarking import log_timer
+from sgdf.fusion import get_fusion_algorithm
 from sgdf.gui.util.keyboard import SUPER, SHIFT, CONTROL
 from sgdf.gui.util.menu import MenuBuilder
 
@@ -50,7 +52,12 @@ class EditorView(object):
 
         # Set up editor window
         self.frame.pack(fill=tk.BOTH, expand=tk.YES)
-        self.root.geometry("1232x500")
+        self.root.geometry("1200x500")
+        self.fusion = get_fusion_algorithm("reference")()
+        self.source_ndarray = None
+        self.mask_ndarray = None
+        self.source_anchor = None
+        self.target_anchor = None
 
     def handle_loadtarget(self, event=None):
         image_path = filedialog.askopenfilename()
@@ -59,7 +66,11 @@ class EditorView(object):
             im = plt.imread(image_path)
             h, w, channels = im.shape
             assert channels == 3, "TODO remove this"
-            self.target_canvas.draw_numpy(im)
+            self.fusion.set_image(im)
+            self.target_canvas.bind("<Button-1>", self.handle_brush_start)
+            self.target_canvas.bind("<B1-Motion>", self.handle_brush_motion)
+            self.target_canvas.bind("<ButtonRelease-1>", self.handle_brush_commit)
+            self.target_canvas.draw_numpy(self.fusion.get_fusion())
 
     def handle_loadsource(self, event=None):
         image_path = filedialog.askopenfilename()
@@ -68,7 +79,33 @@ class EditorView(object):
             im = plt.imread(image_path)
             h, w, channels = im.shape
             assert channels == 3, "TODO remove this"
+            self.source_ndarray = im
+            self.mask_ndarray = np.zeros((h, w), dtype=np.uint8)
             self.source_canvas.draw_numpy(im)
+            self.source_canvas.bind("<Button-1>", self.handle_anchor)
+            self.source_canvas.config(cursor="crosshair")
+
+    def handle_brush_start(self, event):
+        if self.target_anchor is None:
+            self.target_anchor = np.array([event.y, event.x])
+        if self.source_anchor is None:
+            self.source_anchor = np.copy(self.target_anchor)
+        self.handle_brush_motion(event)
+
+    def handle_brush_motion(self, event):
+        self.mask_ndarray[event.y, event.x] = 1
+        self.fusion.update_blend(self.source_ndarray, self.mask_ndarray,
+                                 self.source_anchor - self.target_anchor)
+        self.target_canvas.draw_numpy(self.fusion.get_fusion())
+
+    def handle_brush_commit(self, event):
+        self.fusion.commit_blend()
+        self.target_canvas.draw_numpy(self.fusion.get_fusion())
+        self.mask_ndarray.fill(0)
+
+    def handle_anchor(self, event):
+        self.target_anchor = None
+        self.source_anchor = np.array([event.y, event.x])
 
     def handle_save(self, event=None):
         _log.info("Saving image file: %s", repr(filedialog.askopenfilename()))
@@ -126,5 +163,3 @@ class EditorViewCanvas(tk.Canvas):
                 self.itemconfig(self.active_image_id, image=self.active_image_container)
             else:
                 self.active_image_container.paste(Image.fromarray(ndarray))
-        self.config(cursor="circle")
-        self.unbind("<Button-1>")

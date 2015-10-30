@@ -37,7 +37,7 @@ if __name__ == "__main__":
 
     setup(name="sgdf",
           version="0.1.dev0",
-          description="Scalable gradient domain fusion",
+          description="Streaming gradient domain fusion",
           url="https://github.com/sarajkim/sgdf",
           scripts=glob.glob("bin/sgdf*"),
           packages=packages,
