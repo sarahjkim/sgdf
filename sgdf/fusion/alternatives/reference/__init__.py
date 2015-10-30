@@ -35,23 +35,26 @@ class ReferenceFusion(BaseFusion):
         target = np.copy(self.canvas)
         source_height, source_width, _ = self.active_source.shape
         mask_y, mask_x = self.active_displacement
-        tinyt = target[mask_y : mask_y + source_height,
-                       mask_x : mask_x + source_width, :]
+        tinyt = target[mask_y:mask_y + source_height,
+                       mask_x:mask_x + source_width, :]
         return self.poisson_blend(self.active_source, self.active_mask, tinyt, target,
                                   self.active_displacement)
 
-    def shift(m, direction):
-        padded = np.pad(m, [(d, 0) if d>0 else (0, -d) for d in direction], mode='constant')
-        return padded[[np.s_[:sh] if d>0 else np.s_[-sh:] for sh, d in zip(m.shape, direction)]]
+    def shift(self, m, direction):
+        padded = np.pad(m, [(d, 0) if d > 0 else (0, -d) for d in direction], mode='constant')
+        return padded[[np.s_[:sh] if d > 0 else np.s_[-sh:] for sh, d in zip(m.shape, direction)]]
 
-    def inside(mask):
-        return self.shift(mask, (-1, 0)) & self.shift(mask, (0, -1)) & self.shift(mask, (1, 0)) & self.shift(mask, (0, 1))
+    def inside(self, mask):
+        return (self.shift(mask, (-1, 0)) &
+                self.shift(mask, (0, -1)) &
+                self.shift(mask, (1, 0)) &
+                self.shift(mask, (0, 1)))
 
-    def construct_A4(s, s_border=[[]]):
+    def construct_A4(self, s, s_border=[[]]):
         imh, imw = s.shape
         sy, sx = np.where(s_border)
         npx = imh*imw
-                     # [x,x+1], [x,x-1], [y,y+1], [y,y-1]
+        # [x,x+1], [x,x-1], [y,y+1], [y,y-1]
         all_offsets = [[0, -1], [0, 1], [0, -imw], [0, imw]]
         As = []
         for offset in all_offsets:
@@ -67,22 +70,21 @@ class ReferenceFusion(BaseFusion):
             As.append(A)
         return vstack(As)
 
-    def self.set_b(b, mask, values):
+    def set_b(self, b, mask, values):
         bigmask = np.concatenate([mask, mask, mask, mask])
         b[bigmask] = values[bigmask]
         return b
 
-    def poisson_blend(s, s_mask, tinyt, t, tinyt_topleft, maximum=False):
+    def poisson_blend(self, s, s_mask, tinyt, t, tinyt_topleft, maximum=False):
         s_inside = self.inside(s_mask)
         s_border = s_mask & ~s_inside
-        s_outside = ~s_inside
 
         A4 = self.construct_A4(s)
         t_prime = A4.dot(tinyt.ravel())
         s_prime = A4.dot(s.ravel())
 
         b = t_prime.copy()
-        if maximum == True:
+        if maximum:
             max_prime = np.maximum(s_prime, t_prime)
             b = self.set_b(b, s_inside.ravel(), max_prime)
         else:

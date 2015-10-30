@@ -8,8 +8,8 @@ from sgdf.benchmarking import log_timer
 from sgdf.gui.util.keyboard import SUPER, SHIFT, CONTROL
 from sgdf.gui.util.menu import MenuBuilder
 
-
 _log = logging.getLogger(__name__)
+
 
 class EditorView(object):
     def __init__(self):
