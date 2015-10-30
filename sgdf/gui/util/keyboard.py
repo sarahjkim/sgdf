@@ -1,8 +1,14 @@
 import sys
 
 SUPER = 1
-_VISUAL = {SUPER: "Command" if sys.platform == "darwin" else "Control"}
-_SYMBOLIC = {SUPER: "Command" if sys.platform == "darwin" else "Control"}
+SHIFT = 2
+CONTROL = 3
+_VISUAL = {SUPER: "Command" if sys.platform == "darwin" else "Control",
+           SHIFT: "Shift",
+           CONTROL: "Control"}
+_SYMBOLIC = {SUPER: "Command" if sys.platform == "darwin" else "Control",
+             SHIFT: "Shift",
+             CONTROL: "Control"}
 
 
 def get_visual_keybinding(binding):

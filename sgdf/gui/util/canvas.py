@@ -15,7 +15,6 @@ class ResizingCanvas(tk.Canvas):
         self.width = self.winfo_reqwidth()
 
     def on_resize(self, event):
-        print "exec"
         self.width = event.width
         self.height = event.height
         self.config(width=self.width, height=self.height)

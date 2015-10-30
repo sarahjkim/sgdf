@@ -1,4 +1,5 @@
 import Tkinter as tk
+from collections import OrderedDict
 from sgdf.gui.util.keyboard import get_visual_keybinding, get_symbolic_keybinding
 
 
@@ -9,13 +10,13 @@ class MenuBuilder(object):
 
         ARGUMENTS
 
-            items -- A dictionary of menu category (string) to menu items (list), where the menu
+            items -- A OrderedDict of menu category (string) to menu items (list), where the menu
                      items are tuples of (label, command, accelerator, underline).  You can insert
                      seperators by including an empty tuple (all arguments are optional). See the
                      render() method for more information.
 
         """
-        self.items = {}
+        self.items = OrderedDict()
         if "items" in kwargs:
             self.extend(kwargs["items"])
 

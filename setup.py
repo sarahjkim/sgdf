@@ -42,5 +42,6 @@ if __name__ == "__main__":
           scripts=glob.glob("bin/sgdf*"),
           packages=packages,
           data_files=data_files,
+          install_requires=["matplotlib", "numpy", "scipy"],
           test_suite="nose.collector",
           tests_require=["nose"])
