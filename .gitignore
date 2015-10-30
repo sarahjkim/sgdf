@@ -20,4 +20,5 @@ ehthumbs.db
 /dist
 *.egg-info
 *.pyc
-.eggs
+*.egg
+/.eggs
