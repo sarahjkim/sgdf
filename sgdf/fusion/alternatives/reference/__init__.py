@@ -87,6 +87,24 @@ class ReferenceFusion(BaseFusion):
         return b
 
     def poisson_blend(self, s, s_mask, tinyt, t, tinyt_topleft, maximum=False):
+        """
+        Modifies the target image to blend the source image at the designated mask pixels using a
+        Poisson blend.
+
+        Args:
+            s (2D float np.array): Values of source image at relevant blending pixels;
+                    same size as s_mask array (may be smaller than source image)
+            s_mask (2D bool np.array): Mask with 1 (True) values for source pixels
+            tinyt (2D float np.array): Values of target image at relevant blending pixels;
+                    same size as s_mask array (may be smaller than target image)
+            t (2D float np.array): Full size target image
+            tinyt_topleft ((int, int)): (row, col) designating top-left coordinate of tinyt
+                    with respect to image t
+
+        Returns:
+            (2D float np.array): Channel of modified target image with section of source image
+
+        """
         s_inside = self.inside(s_mask)
         s_border = s_mask & ~s_inside
 

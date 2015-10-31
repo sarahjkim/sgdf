@@ -20,7 +20,15 @@ To install, run the following:
 python2.7 setup.py install
 ```
 
-You may want to run the installation inside of a virtualenv. The application can be started by
+You may want to run the installation inside of a virtualenv. Note that if you choose to do this,
+give the VM access to the system packages. The option looks like this for `virtualenv`:
+
+```shell
+# (Optional) Create VM with access to system packages
+virtualenv --system-site-packages NAME
+```
+
+The application can be started by
 running `sgdf` on the command line.
 
 While writing code for sgdf, you can also run the program without installing. In your shell, change
