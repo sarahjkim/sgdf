@@ -59,8 +59,9 @@ class EditorView(object):
         self.source_anchor = None
         self.target_anchor = None
 
-    def handle_loadtarget(self, event=None):
-        image_path = filedialog.askopenfilename()
+    def handle_loadtarget(self, event=None, image_path=None):
+        if not image_path:
+            image_path = filedialog.askopenfilename()
         if image_path:
             _log.info("Loading target image file: %s", repr(image_path))
             im = plt.imread(image_path)
@@ -72,8 +73,9 @@ class EditorView(object):
             self.target_canvas.bind("<ButtonRelease-1>", self.handle_brush_commit)
             self.target_canvas.draw_numpy(self.fusion.get_fusion())
 
-    def handle_loadsource(self, event=None):
-        image_path = filedialog.askopenfilename()
+    def handle_loadsource(self, event=None, image_path=None):
+        if not image_path:
+            image_path = filedialog.askopenfilename()
         if image_path:
             _log.info("Loading source image file: %s", repr(image_path))
             im = plt.imread(image_path)
