@@ -19,16 +19,40 @@ class ReferenceFusion(BaseFusion):
         self.active = False
         self.active_source = None
         self.active_mask = None
-        self.active_displacement = None
+        self.source_anchor = None
+        self.target_anchor = None
+        self.source_bounds = None
+        self.target_bounds = None
 
-    def set_image(self, ndarray):
-        self.canvas = np.copy(ndarray)
-
-    def update_blend(self, source_ndarray, mask_ndarray, displacement):
-        self.active = True
+    def set_source_image(self, source_ndarray):
         self.active_source = source_ndarray
+
+    def set_target_image(self, target_ndarray):
+        self.canvas = np.copy(target_ndarray)
+
+    def set_anchor_points(self, source_anchor, target_anchor):
+        self.source_anchor = source_anchor
+        self.target_anchor = target_anchor
+
+        s_anchor_row, s_anchor_col = self.source_anchor
+        t_anchor_row, t_anchor_col = self.target_anchor
+
+        s_height, s_width, _ = self.active_source.shape
+        t_height, t_width, _ = self.canvas.shape
+
+        space_above_anchor = min(s_anchor_row, t_anchor_row)
+        space_below_anchor = min(s_height - s_anchor_row, t_height - t_anchor_row)
+        space_left_anchor = min(s_anchor_col, t_anchor_col)
+        space_right_anchor = min(s_width - s_anchor_col, t_width - t_anchor_col)
+
+        self.source_bounds = (s_anchor_row - space_above_anchor, s_anchor_row + space_below_anchor,
+                              s_anchor_col - space_left_anchor, s_anchor_col + space_right_anchor)
+        self.target_bounds = (t_anchor_row - space_above_anchor, t_anchor_row + space_below_anchor,
+                              t_anchor_col - space_left_anchor, t_anchor_col + space_right_anchor)
+
+    def update_blend(self, mask_ndarray):
+        self.active = True
         self.active_mask = mask_ndarray
-        self.active_displacement = displacement
 
     def commit_blend(self):
         self.canvas = self.get_fusion()
@@ -40,14 +64,20 @@ class ReferenceFusion(BaseFusion):
             target = np.copy(self.canvas)
             if not self.active:
                 return target
-            source_height, source_width, _ = self.active_source.shape
-            mask_y, mask_x = self.active_displacement
-            tinyt = target[mask_y:mask_y + source_height,
-                           mask_x:mask_x + source_width, :]
+
+            s_top, s_bottom, s_left, s_right = self.source_bounds
+            t_top, t_bottom, t_left, t_right = self.target_bounds
+            s = self.active_source[s_top:s_bottom, s_left:s_right]
+            s_mask = self.active_mask[t_top:t_bottom, t_left:t_right]
+            tinyt = target[t_top:t_bottom, t_left:t_right, :]
+            tinyt_topleft = (t_top, t_left)
+
             for channel in range(3):
-                solution = self.poisson_blend(self.active_source[:, :, channel], self.active_mask,
-                                              tinyt[:, :, channel], target[:, :, channel],
-                                              self.active_displacement)
+                solution = self.poisson_blend(s[:, :, channel],
+                                              s_mask,
+                                              tinyt[:, :, channel],
+                                              target[:, :, channel],
+                                              tinyt_topleft)
                 target[:, :, channel] = solution
             return target
 
