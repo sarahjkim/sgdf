@@ -1,6 +1,6 @@
 import Tkinter as tk
-from PIL import Image, ImageTk
 from sgdf.benchmarking import log_timer
+from sgdf.gui.numpytk import PhotoImage
 
 
 class EditorViewCanvas(tk.Canvas):
@@ -16,7 +16,7 @@ class EditorViewCanvas(tk.Canvas):
         """
         with log_timer("EditorViewCanvas.draw_numpy"):
             if self.active_image_container is None:
-                self.active_image_container = ImageTk.PhotoImage(Image.fromarray(ndarray))
+                self.active_image_container = PhotoImage(ndarray=ndarray)
                 self.itemconfig(self.active_image_id, image=self.active_image_container)
             else:
-                self.active_image_container.paste(Image.fromarray(ndarray))
+                self.active_image_container.paste(ndarray=ndarray)
