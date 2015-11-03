@@ -66,11 +66,12 @@ class EditorView(object):
             im = plt.imread(image_path)
             h, w, channels = im.shape
             assert channels == 3, "TODO remove this"
+            if np.max(im) > 1.0:
+                im = im.astype(np.float32) / 255.
             self.fusion.set_target_image(im)
-            self.mask_ndarray = np.zeros((h, w), dtype=np.uint8)
+            self.mask_ndarray = np.zeros((h, w), dtype=np.bool)
             self.target_canvas.bind("<Button-1>", self.handle_brush_start)
             self.target_canvas.bind("<B1-Motion>", self.handle_brush_motion)
-            self.target_canvas.bind("<ButtonRelease-1>", self.handle_brush_commit)
             self.target_canvas.draw_numpy(self.fusion.get_fusion())
 
     def handle_loadsource(self, event=None, image_path=None):
@@ -81,6 +82,8 @@ class EditorView(object):
             im = plt.imread(image_path)
             h, w, channels = im.shape
             assert channels == 3, "TODO remove this"
+            if np.max(im) > 1.0:
+                im = im.astype(np.float32) / 255.
             self.fusion.set_source_image(im)
             self.source_canvas.draw_numpy(im)
             self.source_canvas.bind("<Button-1>", self.handle_anchor)
@@ -98,18 +101,15 @@ class EditorView(object):
         y_coord, x_coord = event.y, event.x
         t_height, t_width = self.mask_ndarray.shape
         if y_coord < t_height and x_coord < t_width:
-            self.mask_ndarray[y_coord, x_coord] = 1
+            self.mask_ndarray[y_coord - 5 : y_coord + 5, x_coord - 5 : x_coord + 5] = True
             self.fusion.update_blend(self.mask_ndarray)
             self.target_canvas.draw_numpy(self.fusion.get_fusion())
-
-    def handle_brush_commit(self, event):
-        self.fusion.commit_blend()
-        self.target_canvas.draw_numpy(self.fusion.get_fusion())
-        self.mask_ndarray.fill(0)
 
     def handle_anchor(self, event):
         self.target_anchor = None
         self.source_anchor = np.array([event.y, event.x])
+        self.fusion.commit_blend()
+        self.mask_ndarray.fill(False)
 
     def handle_save(self, event=None):
         _log.info("Saving image file: %s", repr(filedialog.askopenfilename()))

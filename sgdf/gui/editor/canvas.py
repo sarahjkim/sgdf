@@ -1,3 +1,4 @@
+import numpy as np
 import Tkinter as tk
 from PIL import Image, ImageTk
 from sgdf.benchmarking import log_timer
@@ -14,6 +15,8 @@ class EditorViewCanvas(tk.Canvas):
         Draws a numpy array (H * W * 3) as an image on this canvas.
 
         """
+        assert ndarray.dtype == np.float32
+        ndarray = np.clip(ndarray * 255., 0., 255.).astype(np.uint8)
         with log_timer("EditorViewCanvas.draw_numpy"):
             if self.active_image_container is None:
                 self.active_image_container = ImageTk.PhotoImage(Image.fromarray(ndarray))
