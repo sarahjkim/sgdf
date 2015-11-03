@@ -10,4 +10,4 @@ def log_timer(name):
     before = time.time()
     yield
     after = time.time()
-    _log.debug("log_timer(%s): %s seconds", repr(name), repr(after - before))
+    _log.debug("log_timer(%s):%.8fms", repr(name), 1000 * (after - before))

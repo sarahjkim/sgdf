@@ -13,6 +13,7 @@ ehthumbs.db
 *~
 \#*\#
 /tags
+*.so
 
 # Project-specific
 /env

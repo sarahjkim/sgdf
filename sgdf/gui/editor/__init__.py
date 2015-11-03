@@ -4,9 +4,9 @@ import numpy as np
 import Tkinter as tk
 import tkFileDialog as filedialog
 from collections import OrderedDict
-from PIL import Image, ImageTk
-from sgdf.benchmarking import log_timer
 from sgdf.fusion import get_fusion_algorithm
+from sgdf.gui.editor.canvas import EditorViewCanvas
+from sgdf.gui.editor.frame import EditorViewFrame
 from sgdf.gui.util.keyboard import SUPER, SHIFT, CONTROL
 from sgdf.gui.util.menu import MenuBuilder
 
@@ -122,48 +122,3 @@ class EditorView(object):
 
     def mainloop(self):
         return self.root.mainloop()
-
-
-class EditorViewFrame(tk.Frame):
-    def __init__(self, *args, **kwargs):
-        """
-        A subclass of tk.Frame that contains several canvas elements. This frame will dynamically
-        resize the canvas elements when the frame itself is resized, so that the frame width is
-        equally distributed between them.
-
-        """
-        tk.Frame.__init__(self, *args, **kwargs)
-        self.canvas_set = []
-        self.bind("<Configure>", self.on_resize)
-
-    def register_canvas_set(self, *args):
-        self.canvas_set = args
-
-    def on_resize(self, event):
-        assert self.canvas_set
-        height = event.height
-        width = event.width
-        width_per_canvas = max(0, width / len(self.canvas_set))
-        width_remainder = width - width_per_canvas * (len(self.canvas_set) - 1)
-        for canvas in self.canvas_set[:-1]:
-            canvas.config(height=height, width=width_per_canvas)
-        self.canvas_set[-1].config(height=height, width=width_remainder)
-
-
-class EditorViewCanvas(tk.Canvas):
-    def __init__(self, *args, **kwargs):
-        tk.Canvas.__init__(self, *args, **kwargs)
-        self.active_image_id = self.create_image(0, 0, anchor=tk.NW)
-        self.active_image_container = None
-
-    def draw_numpy(self, ndarray):
-        """
-        Draws a numpy array (H * W * 3) as an image on this canvas.
-
-        """
-        with log_timer("EditorViewCanvas.draw_numpy"):
-            if self.active_image_container is None:
-                self.active_image_container = ImageTk.PhotoImage(Image.fromarray(ndarray))
-                self.itemconfig(self.active_image_id, image=self.active_image_container)
-            else:
-                self.active_image_container.paste(Image.fromarray(ndarray))
