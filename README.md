@@ -13,36 +13,27 @@ This program requires:
 * Python.h development libraries
 * C++ compiler
 
-To install, run the following:
+You can just set up sgdf's dependencies and run the script directly:
 
 ```shell
-# Installs the sgdf package and executable
-python2.7 setup.py install
-```
+# Installs sgdf's dependencies
+pip install -r requirements.txt
 
-You may want to run the installation inside of a virtualenv. Note that if you choose to do this,
-give the VM access to the system packages. The option looks like this for `virtualenv`:
-
-```shell
-# (Optional) Create VM with access to system packages
-virtualenv --system-site-packages NAME
-```
-
-The application can be started by
-running `sgdf` on the command line.
-
-While writing code for sgdf, you can also run the program without installing. In your shell, change
-directories to the root of this repository. Then, run the bundled script:
-
-```shell
 # (Optional) Update the native extensions when necessary
 python2.7 setup.py build_ext --inplace
 
 # (Optional) Run the unit tests
 python2.7 setup.py test
 
-# Run the sgdf executable
+# Run sgdf
 ./bin/sgdf
+```
+
+Or, if you would like to install sgdf for use anywhere, run the following:
+
+```shell
+# Installs the sgdf package and executable
+python2.7 setup.py install
 ```
 
 Contributing
