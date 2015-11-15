@@ -1,9 +1,8 @@
 import argparse
 import logging
-import numpy as np
-from matplotlib.image import imread, imsave
+from sgdf.benchmarking.suites import benchmark_default
+from sgdf.benchmarking.headless import fusion_from_file
 from sgdf.gui.editor import EditorView
-from sgdf.fusion import get_fusion_algorithm
 
 
 def main():
@@ -34,21 +33,10 @@ def main():
             editor_view.handle_loadtarget(image_path=args.target)
         editor_view.mainloop()
     elif args.command == "benchmark":
-        print "Jiggaflops: 9999+"
+        benchmark_default()
     elif args.command == "headless":
-        # TODO Find a better home for this code
-        fusion = get_fusion_algorithm(args.algorithm)()
-        mask = imread(args.mask)
-        mask = np.mean(mask, 2)
-        mask = (mask > np.average(mask))
-        source_im = imread(args.source)
-        if np.max(source_im) > 1.0:
-            source_im = source_im.astype(np.float32) / 255.
-        target_im = imread(args.target)
-        if np.max(target_im) > 1.0:
-            target_im = target_im.astype(np.float32) / 255.
-        fusion.set_target_image(target_im)
-        fusion.set_source_image(source_im)
-        fusion.set_anchor_points(np.array([0, 0]), np.array([0, 0]))
-        fusion.update_blend(mask)
-        imsave(args.output, (fusion.get_fusion() * 255.).astype(np.uint8))
+        assert args.algorithm
+        assert args.source
+        assert args.target
+        assert args.mask
+        fusion_from_file(args.algorithm, args.source, args.target, args.mask, args.output)
