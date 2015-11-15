@@ -1,7 +1,7 @@
 import argparse
 import logging
-import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.image import imread, imsave
 from sgdf.gui.editor import EditorView
 from sgdf.fusion import get_fusion_algorithm
 
@@ -38,17 +38,17 @@ def main():
     elif args.command == "headless":
         # TODO Find a better home for this code
         fusion = get_fusion_algorithm(args.algorithm)()
-        mask = plt.imread(args.mask)
+        mask = imread(args.mask)
         mask = np.mean(mask, 2)
         mask = (mask > np.average(mask))
-        source_im = plt.imread(args.source)
+        source_im = imread(args.source)
         if np.max(source_im) > 1.0:
             source_im = source_im.astype(np.float32) / 255.
-        target_im = plt.imread(args.target)
+        target_im = imread(args.target)
         if np.max(target_im) > 1.0:
             target_im = target_im.astype(np.float32) / 255.
         fusion.set_target_image(target_im)
         fusion.set_source_image(source_im)
         fusion.set_anchor_points(np.array([0, 0]), np.array([0, 0]))
         fusion.update_blend(mask)
-        plt.imsave(args.output, (fusion.get_fusion() * 255.).astype(np.uint8))
+        imsave(args.output, (fusion.get_fusion() * 255.).astype(np.uint8))

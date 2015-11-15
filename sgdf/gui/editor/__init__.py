@@ -1,9 +1,9 @@
 import logging
-import matplotlib.pyplot as plt
 import numpy as np
 import Tkinter as tk
 import tkFileDialog as filedialog
 from collections import OrderedDict
+from matplotlib.image import imread
 from sgdf.fusion import get_fusion_algorithm
 from sgdf.gui.editor.canvas import EditorViewCanvas
 from sgdf.gui.editor.frame import EditorViewFrame
@@ -63,7 +63,7 @@ class EditorView(object):
             image_path = filedialog.askopenfilename()
         if image_path:
             _log.info("Loading target image file: %s", repr(image_path))
-            im = plt.imread(image_path)
+            im = imread(image_path)
             h, w, channels = im.shape
             assert channels == 3, "TODO remove this"
             if np.max(im) > 1.0:
@@ -79,7 +79,7 @@ class EditorView(object):
             image_path = filedialog.askopenfilename()
         if image_path:
             _log.info("Loading source image file: %s", repr(image_path))
-            im = plt.imread(image_path)
+            im = imread(image_path)
             h, w, channels = im.shape
             assert channels == 3, "TODO remove this"
             if np.max(im) > 1.0:
