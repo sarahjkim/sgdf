@@ -53,6 +53,7 @@ class ReferenceFusion(BaseFusion):
 
     def update_blend(self, mask_ndarray):
         assert mask_ndarray.dtype == np.bool
+        assert mask_ndarray.shape == self.canvas.shape[:2]
         self.active = True
         self.active_mask = mask_ndarray
 

@@ -25,6 +25,9 @@ python2.7 setup.py build_ext --inplace
 # (Optional) Run the unit tests
 python2.7 setup.py test
 
+# (Optional) Run the unit tests with pytest, with debugger
+py.test --pdb sgdf/
+
 # Run sgdf
 ./bin/sgdf
 ```
