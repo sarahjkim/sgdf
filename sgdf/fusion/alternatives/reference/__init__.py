@@ -52,6 +52,7 @@ class ReferenceFusion(BaseFusion):
                               t_anchor_col - space_left_anchor, t_anchor_col + space_right_anchor)
 
     def update_blend(self, mask_ndarray):
+        assert mask_ndarray.dtype == np.bool
         self.active = True
         self.active_mask = mask_ndarray
 
