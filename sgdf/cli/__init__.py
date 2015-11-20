@@ -33,7 +33,7 @@ def main():
             editor_view.handle_loadtarget(image_path=args.target)
         editor_view.mainloop()
     elif args.command == "benchmark":
-        benchmark_default()
+        benchmark_default(args.algorithm)
     elif args.command == "headless":
         assert args.algorithm
         assert args.source

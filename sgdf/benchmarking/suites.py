@@ -17,8 +17,8 @@ def log_timer(name, level=None):
     logger("log_timer(%s):%.8fms", repr(name), 1000 * (after - before))
 
 
-def benchmark_default():
+def benchmark_default(algorithm="reference"):
     with log_timer("benchmark: easy", level="info"):
-        fusion_from_file("reference", join(EXAMPLES_ROOT, "easy-source.jpg"),
+        fusion_from_file(algorithm, join(EXAMPLES_ROOT, "easy-source.jpg"),
                          join(EXAMPLES_ROOT, "easy-target.jpg"),
                          join(EXAMPLES_ROOT, "easy-mask.jpg"))

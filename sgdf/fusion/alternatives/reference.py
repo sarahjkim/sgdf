@@ -2,7 +2,7 @@ import numpy as np
 from scipy.sparse import diags, vstack
 from scipy.sparse.linalg import lsqr
 from sgdf.benchmarking import log_timer
-from sgdf.fusion import BaseFusion
+from sgdf.fusion.alternatives.base import BaseFusion
 
 
 class ReferenceFusion(BaseFusion):
@@ -139,7 +139,6 @@ class ReferenceFusion(BaseFusion):
                       dtype=float)
             r, c = (A[source_w*sy + sx, :] < 0).nonzero()
             A[(source_w*sy + sx)[r], c] = 0
-            r, c = A[source_w*sy + sx, :].nonzero()
             As.append(A)
         return vstack(As)
 
