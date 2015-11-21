@@ -23,7 +23,7 @@ class BaseFusion(object):
     def set_source_image(self, source_ndarray):
         """
         Sets the source image (H * W * C). Moving the cursor over the target image will blend source
-        pixels into the target image.
+        pixels into the target image. The source_ndarray must not be modified.
 
         """
         raise RuntimeError("Unimplemented method")
@@ -31,7 +31,7 @@ class BaseFusion(object):
     def set_target_image(self, target_ndarray):
         """
         Sets the canvas to a target image (H * W * C). This image will be the base image, upon which
-        other images will be blended.
+        other images will be blended. The target_ndarray must not be modified.
 
         """
         raise RuntimeError("Unimplemented method")

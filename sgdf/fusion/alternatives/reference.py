@@ -29,7 +29,7 @@ class ReferenceFusion(BaseFusion):
 
     def set_target_image(self, target_ndarray):
         assert target_ndarray.dtype == np.float32
-        self.canvas = np.copy(target_ndarray)
+        self.canvas = target_ndarray
 
     def set_anchor_points(self, source_anchor, target_anchor):
         self.source_anchor = source_anchor
@@ -64,7 +64,6 @@ class ReferenceFusion(BaseFusion):
 
     def get_fusion(self):
         with log_timer("ReferenceFusion.get_fusion"):
-            # TODO is this inefficient? OH WELL
             target = np.copy(self.canvas)
             if not self.active:
                 return target
@@ -74,15 +73,11 @@ class ReferenceFusion(BaseFusion):
             source = self.active_source[s_top:s_bottom, s_left:s_right]
             s_mask = self.active_mask[t_top:t_bottom, t_left:t_right]
             tinyt = target[t_top:t_bottom, t_left:t_right, :]
-            tinyt_topleft = (t_top, t_left)
 
             for channel in range(3):
-                solution = self.poisson_blend(source[:, :, channel],
-                                              s_mask,
-                                              tinyt[:, :, channel],
-                                              target[:, :, channel],
-                                              tinyt_topleft)
-                target[:, :, channel] = solution
+                solution = self.poisson_blend(source[:, :, channel], s_mask, tinyt[:, :, channel])
+                target[t_top:t_bottom, t_left:t_right, channel] = solution
+
             return target
 
     def shift(self, im, amounts):
@@ -147,10 +142,9 @@ class ReferenceFusion(BaseFusion):
         b[bigmask] = values[bigmask]
         return b
 
-    def poisson_blend(self, source, mask, tinyt, t, tinyt_topleft, maximum=False):
+    def poisson_blend(self, source, mask, tinyt, maximum=False):
         """
-        Modifies the target image to blend the source image at the designated mask pixels using a
-        Poisson blend.
+        Blends the source image into the target using a mask.
 
         Args:
             source (2D float np.array): Values of source image at relevant blending pixels;
@@ -158,9 +152,6 @@ class ReferenceFusion(BaseFusion):
             mask (2D bool np.array): Mask with 1 (True) values for source pixels
             tinyt (2D float np.array): Values of target image at relevant blending pixels;
                     same size as mask array (may be smaller than target image)
-            t (2D float np.array): Full size target image
-            tinyt_topleft ((int, int)): (row, col) designating top-left coordinate of tinyt
-                    with respect to image t
 
         Returns:
             (2D float np.array): Channel of modified target image with section of source image
@@ -185,11 +176,4 @@ class ReferenceFusion(BaseFusion):
         A4 = self.construct_A4(source, mask_border=mask_border)
         imh, imw = source.shape
         v = lsqr(A4, b)[0]
-        out = v.reshape((imh, imw))
-
-        tttly, tttlx = tinyt_topleft
-        tty, ttx = tinyt.shape
-
-        t[tttly:tttly + tty, tttlx:tttlx + ttx] = out
-
-        return t
+        return v.reshape((imh, imw))
