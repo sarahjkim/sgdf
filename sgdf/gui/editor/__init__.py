@@ -3,12 +3,12 @@ import numpy as np
 import Tkinter as tk
 import tkFileDialog as filedialog
 from collections import OrderedDict
-from matplotlib.image import imread
 from sgdf.fusion import get_fusion_algorithm
 from sgdf.gui.editor.canvas import EditorViewCanvas
 from sgdf.gui.editor.frame import EditorViewFrame
 from sgdf.gui.util.keyboard import SUPER, SHIFT, CONTROL
 from sgdf.gui.util.menu import MenuBuilder
+from sgdf.util.io import imread
 
 _log = logging.getLogger(__name__)
 
@@ -65,9 +65,6 @@ class EditorView(object):
             _log.info("Loading target image file: %s", repr(image_path))
             im = imread(image_path)
             h, w, channels = im.shape
-            assert channels == 3, "TODO remove this"
-            if np.max(im) > 1.0:
-                im = im.astype(np.float32) / 255.
             self.fusion.set_target_image(im)
             self.mask_ndarray = np.zeros((h, w), dtype=np.bool)
             self.target_canvas.bind("<Button-1>", self.handle_brush_start)
@@ -80,10 +77,6 @@ class EditorView(object):
         if image_path:
             _log.info("Loading source image file: %s", repr(image_path))
             im = imread(image_path)
-            h, w, channels = im.shape
-            assert channels == 3, "TODO remove this"
-            if np.max(im) > 1.0:
-                im = im.astype(np.float32) / 255.
             self.fusion.set_source_image(im)
             self.source_canvas.draw_numpy(im)
             self.source_canvas.bind("<Button-1>", self.handle_anchor)
