@@ -39,13 +39,17 @@ class EditorView(object):
                               (),
                               ("Close", self.handle_quit, (SUPER, "w"))]
         menu_items["Edit"] = [("Undo", self.handle_unimplemented, (SUPER, "z"))]
-        menu_items["Brush"] = [("Circle (feathered)", self.handle_unimplemented, (SUPER, "1")),
-                               ("Circle", self.handle_unimplemented, (SUPER, "2")),
-                               ("Square (feathered)", self.handle_unimplemented, (SUPER, "3")),
-                               ("Square", self.handle_unimplemented, (SUPER, "4")),
+        menu_items["Brush"] = [("Square",
+                                lambda: self.set_brush_circular(False), (SUPER, "1")),
+                               ("Circle",
+                                lambda: self.set_brush_circular(True), (SUPER, "2")),
+                               ("Feathered",
+                                lambda: self.set_brush_feathered(True), (SUPER, "3")),
+                               ("Not Feathered",
+                                lambda: self.set_brush_feathered(False), (SUPER, "4")),
                                (),
-                               ("Increase brush size", self.handle_unimplemented, (CONTROL, "]")),
-                               ("Decrease brush size", self.handle_unimplemented, (CONTROL, "["))]
+                               ("Increase brush size", self.increase_brush_size, (CONTROL, "]")),
+                               ("Decrease brush size", self.decrease_brush_size, (CONTROL, "["))]
         menu_items["Help"] = []
         self.menu = MenuBuilder(items=menu_items)
         self.menu.render(self.root)
@@ -57,6 +61,11 @@ class EditorView(object):
         self.mask_ndarray = None
         self.source_anchor = None
         self.target_anchor = None
+
+        # Set up brush properties
+        self.brush_radius = 5
+        self.brush_circular = False
+        self.brush_feathered = False    # TODO: How to make brush actually feathered?
 
     def handle_loadtarget(self, event=None, image_path=None):
         if not image_path:
@@ -94,7 +103,7 @@ class EditorView(object):
         y_coord, x_coord = event.y, event.x
         t_height, t_width = self.mask_ndarray.shape
         if y_coord < t_height and x_coord < t_width:
-            self.mask_ndarray[y_coord - 5 : y_coord + 5, x_coord - 5 : x_coord + 5] = True
+            self.set_brush_stroke_in_mask(y_coord, x_coord)
             self.fusion.update_blend(self.mask_ndarray)
             self.target_canvas.draw_numpy(self.fusion.get_fusion())
 
@@ -106,6 +115,33 @@ class EditorView(object):
 
     def handle_save(self, event=None):
         _log.info("Saving image file: %s", repr(filedialog.askopenfilename()))
+
+    def set_brush_stroke_in_mask(self, y, x):
+        # TODO: Feathered still does nothing
+        height, width = self.mask_ndarray.shape
+        radius = self.brush_radius
+        if self.brush_circular:
+            brush_y, brush_x = np.ogrid[-y:height - y, -x:width - x]
+            mask = brush_x * brush_x + brush_y * brush_y <= radius * radius
+            self.mask_ndarray[mask] = True
+        else:
+            y1, y2 = max(y - radius, 0), min(height, y + radius)
+            x1, x2 = max(x - radius, 0), min(width, x + radius)
+            self.mask_ndarray[y1:y2, x1:x2] = True
+
+    def set_brush_circular(self, circle):
+        self.brush_circular = circle
+
+    def set_brush_feathered(self, feathered):
+        self.brush_feathered = feathered
+
+    def increase_brush_size(self, event=None):
+        # TODO: Disable menu item if brush size is already too large
+        self.brush_radius += 5
+
+    def decrease_brush_size(self, event=None):
+        # TODO: Disable menu item if brush size is already too small
+        self.brush_radius -= 5
 
     def handle_unimplemented(self, event=None):
         _log.warn("Unimplemented event handler triggered")
