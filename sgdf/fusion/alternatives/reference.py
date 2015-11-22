@@ -113,10 +113,10 @@ class ReferenceFusion(BaseFusion):
         assert im.shape == original_dimensions, "This code has a bug, FIX IT"
         return im
 
-    def inside(self, mask):
-        return (self.shift(mask, (-1, 0)) &
-                self.shift(mask, (0, -1)) &
-                self.shift(mask, (1, 0)) &
+    def dilate(self, mask):
+        return (self.shift(mask, (-1, 0)) |
+                self.shift(mask, (0, -1)) |
+                self.shift(mask, (1, 0)) |
                 self.shift(mask, (0, 1)))
 
     def construct_A4(self, source, mask_border=[[]]):
@@ -157,8 +157,8 @@ class ReferenceFusion(BaseFusion):
             (2D float np.array): Channel of modified target image with section of source image
 
         """
-        mask_inside = self.inside(mask)
-        mask_border = mask & ~mask_inside
+        mask_dilated = self.dilate(mask)
+        mask_border = mask ^ mask_dilated
 
         A4 = self.construct_A4(source)
         t_prime = A4.dot(tinyt.ravel())
@@ -167,13 +167,13 @@ class ReferenceFusion(BaseFusion):
         b = t_prime.copy()
         if maximum:
             max_prime = np.maximum(s_prime, t_prime)
-            b = self.set_b(b, mask_inside.ravel(), max_prime)
+            b = self.set_b(b, mask.ravel(), max_prime)
         else:
-            b = self.set_b(b, mask_inside.ravel(), s_prime)
+            b = self.set_b(b, mask.ravel(), s_prime)
         tinyt_values = np.concatenate([tinyt.ravel(), tinyt.ravel(), tinyt.ravel(), tinyt.ravel()])
         b = self.set_b(b, mask_border.ravel(), tinyt_values)
 
         A4 = self.construct_A4(source, mask_border=mask_border)
         imh, imw = source.shape
         v = lsqr(A4, b)[0]
-        return v.reshape((imh, imw))
+        return v.reshape((imh, imw)).clip(0, 1)
