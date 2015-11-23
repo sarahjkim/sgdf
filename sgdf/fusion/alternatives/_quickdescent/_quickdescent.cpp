@@ -50,8 +50,7 @@ Quickdescent::parseArgs(PyObject *args) {
 
 static inline bool isBorder(PyArrayObject *mask, npy_intp y, npy_intp x) {
     npy_intp *dims = PyArray_DIMS(mask);
-    // TODO fix this
-    if (y < 0 || y >= dims[0] || x < 0 || x >= dims[1]) {
+    if (y == 0 || y == dims[0]-1 || x == 0 || x == dims[1]-1) {
         return true;
     }
     return !(*(bool *)PyArray_GETPTR2(mask, y - 1, x) &&
@@ -62,8 +61,20 @@ static inline bool isBorder(PyArrayObject *mask, npy_intp y, npy_intp x) {
 
 
 static float averageBorderValue(PyArrayObject *im, PyArrayObject *mask) {
-    // TODO fix me
-    return 0.0;
+    npy_intp y, x;
+    npy_intp *dims = PyArray_DIMS(mask);
+    float total = 0.0;
+    int n = 0;
+    for (y = 0; y < dims[0]; y++) {
+        for (x = 0; x < dims[1]; x++) {
+            if (isBorder(mask, y, x)) {
+                total += *(float *)PyArray_GETPTR2(mask, y, x);
+                n += 1;
+            }
+        }
+    }
+    if (n == 0) return 0.0;
+    else return total/n;
 }
 
 
