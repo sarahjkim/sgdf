@@ -47,16 +47,30 @@ Quickdescent::parseArgs(PyObject *args) {
     return 0;
 }
 
-
+/*
+    isBorder returns whether or not the pixel in the mask is a border
+    of the mask area.  
+*/
 static inline bool isBorder(PyArrayObject *mask, npy_intp y, npy_intp x) {
     npy_intp *dims = PyArray_DIMS(mask);
-    if (y == 0 || y == dims[0]-1 || x == 0 || x == dims[1]-1) {
-        return true;
+    if (y < 0 || y >= dims[0] || x < 0 || x >= dims[1]) {
+        return false;
     }
-    return !(*(bool *)PyArray_GETPTR2(mask, y - 1, x) &&
-             *(bool *)PyArray_GETPTR2(mask, y + 1, x) &&
-             *(bool *)PyArray_GETPTR2(mask, y, x - 1) &&
-             *(bool *)PyArray_GETPTR2(mask, y, x + 1));
+    int neighbors = 0;
+
+    if(y > 0 && *(bool *)PyArray_GETPTR2(mask, y - 1, x))
+        neighbors++;
+    if(y < dims[0] - 1 && *(bool *)PyArray_GETPTR2(mask, y + 1, x)
+        neighbors++; 
+    if(x > 0 && *(bool *)PyArray_GETPTR2(mask, y, x - 1))
+        neighbors++;
+    if(x < dims[1] - 1 && *(bool *)PyArray_GETPTR2(mask, y, x + 1))
+        neighbors++;
+
+    bool self = *(bool *)PyArray_GETPTR2(mask, y, x);
+
+    return (neighbors > 0) && !self;
+
 }
 
 
