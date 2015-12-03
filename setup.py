@@ -50,7 +50,8 @@ if __name__ == "__main__":
                 print "Extension:", extension_name
                 extension = Extension(extension_name,
                                       map(lambda name: os.path.join(dirpath, name), c_sources),
-                                      include_dirs=[np.get_include()])
+                                      include_dirs=[np.get_include()],
+                                      extra_compile_args=["-std=c++11", "-g", "-O2"])
                 extensions.append(extension)
         elif "__init__.py" in filenames:
             packages.append(".".join(fullsplit(dirpath)))
