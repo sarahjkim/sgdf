@@ -238,7 +238,7 @@ Quickdescent::averageBorderValue(PyArrayObject *im) {
     for (y = 0; y < shape[0]; y++) {
         for (x = 0; x < shape[1]; x++) {
             if (border_mask[y * shape[1] + x]) {
-                total += *(float *)PyArray_GETPTR2(arr_mask, y, x);
+                total += *(float *)PyArray_GETPTR2(im, y, x);
                 n += 1;
             }
         }

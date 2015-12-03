@@ -27,7 +27,7 @@ def benchmark_default(algorithm="reference"):
                          join(EXAMPLES_ROOT, "gradient-target.png"),
                          join(EXAMPLES_ROOT, "gradient-mask.png"))
     with log_timer("benchmark: brick", level="info"):
-        fusion_from_file(algorithm, join(EXAMPLES_ROOT, "brick-source.png"),
-                         join(EXAMPLES_ROOT, "brick-target.png"),
-                         join(EXAMPLES_ROOT, "brick-mask.png"),
+        fusion_from_file(algorithm, join(EXAMPLES_ROOT, "brick-source.jpg"),
+                         join(EXAMPLES_ROOT, "brick-target.jpg"),
+                         join(EXAMPLES_ROOT, "brick-mask.jpg"),
                          offset=[81, 137])
