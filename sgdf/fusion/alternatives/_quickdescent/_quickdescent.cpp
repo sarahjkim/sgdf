@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <omp.h>
 #include "Python.h"
 #include "numpy/arrayobject.h"
 
@@ -15,12 +16,61 @@ class Quickdescent {
         Quickdescent() {};
         ~Quickdescent() {};
         int parseArgs(PyObject *args);
-        float averageBorderValue(PyArrayObject *im);
         int initializeGuess();
         float descend();
+    private:
+        float averageBorderValue(PyArrayObject *im);
+        float calcErrorForPixel(npy_intp y, npy_intp x);
+        float calcErrorForPixelNeighbor(float solutionPixel, float sourcePixel,
+                                        npy_intp y, npy_intp x);
 };
 
 
+/*
+ * Returns whether or not the pixel at coordinates (y, x) in mask is a border
+ * pixel.
+ *
+ * @param mask  Designates inner pixels (values calculated based on
+ *              source/target values)
+ * @param y     y-coordinate of pixel being considered
+ * @param x     x-coordinate of pixel being considered
+ * @return      Whether or not designated pixel in mask is a border pixel
+ */
+static inline bool isBorder(PyArrayObject *mask, npy_intp y, npy_intp x) {
+    npy_intp *dims = PyArray_DIMS(mask);
+    if (y < 0 || y >= dims[0] || x < 0 || x >= dims[1]) {
+        return false;
+    }
+
+    bool isInner = *(bool *)PyArray_GETPTR2(mask, y, x);
+    if (isInner) {
+        return false;
+    }
+
+    int neighbors = 0;
+    if (y > 0 && *(bool *)PyArray_GETPTR2(mask, y - 1, x)) {
+        neighbors++;
+    }
+    if (y < dims[0] - 1 && *(bool *)PyArray_GETPTR2(mask, y + 1, x)) {
+        neighbors++;
+    }
+    if (x > 0 && *(bool *)PyArray_GETPTR2(mask, y, x - 1)) {
+        neighbors++;
+    }
+    if (x < dims[1] - 1 && *(bool *)PyArray_GETPTR2(mask, y, x + 1)) {
+        neighbors++;
+    }
+    return neighbors > 0;
+}
+
+
+/*
+ * Parses arguments given to poisson_blend.
+ *
+ * @return       Designates successfully parsing the arguments
+ * @side-effect  Sets the values of arr_source, arr_mask, arr_tinyt,
+ *               arr_solution, and border_mask
+ */
 int
 Quickdescent::parseArgs(PyObject *args) {
     PyObject *arg_source, *arg_mask, *arg_tinyt, *arg_solution;
@@ -68,48 +118,98 @@ Quickdescent::parseArgs(PyObject *args) {
 
 
 /*
- * Returns whether or not the pixel at coordinates (y, x) in mask is a border
- * pixel.
+ * Computes the starting point for gradient descent based on the following
+ * heuristic. We start off the solution values to the source pixel values
+ * plus the difference between the average border value of the target and
+ * source images. This has the effect of bringing us closer to the final
+ * pixel values by maintaining the gradients of the source image while bringing
+ * the border values closer to the target/destination image.
  *
- * @param mask Designates inner pixels (values calculated based on
- *             source/target values)
- * @param y    y-coordinate of pixel being considered
- * @param x    x-coordinate of pixel being considered
- * @return     Whether or not designated pixel in mask is a border pixel
+ * @return       Designates a successful initialization
+ * @side-effect  Sets the values of arr_solution
  */
-static inline bool isBorder(PyArrayObject *mask, npy_intp y, npy_intp x) {
-    npy_intp *dims = PyArray_DIMS(mask);
-    if (y < 0 || y >= dims[0] || x < 0 || x >= dims[1]) {
-        return false;
-    }
+int
+Quickdescent::initializeGuess() {
+    float targetAvg = averageBorderValue(arr_tinyt);
+    float sourceAvg = averageBorderValue(arr_source);
+    float avgDiff = targetAvg - sourceAvg;
 
-    bool isInner = *(bool *)PyArray_GETPTR2(mask, y, x);
-    if (isInner) {
-        return false;
+    npy_intp y, x;
+    npy_intp *dims = PyArray_DIMS(arr_mask);
+    for (y = 0; y < dims[0]; y++) {
+        for (x = 0; x < dims[1]; x++) {
+            float sourceVal = *(float *)PyArray_GETPTR2(arr_source, y, x);
+            *(float*)PyArray_GETPTR2(arr_solution, y, x) = sourceVal + avgDiff;
+        }
     }
-
-    int neighbors = 0;
-    if (y > 0 && *(bool *)PyArray_GETPTR2(mask, y - 1, x)) {
-        neighbors++;
-    }
-    if (y < dims[0] - 1 && *(bool *)PyArray_GETPTR2(mask, y + 1, x)) {
-        neighbors++;
-    }
-    if (x > 0 && *(bool *)PyArray_GETPTR2(mask, y, x - 1)) {
-        neighbors++;
-    }
-    if (x < dims[1] - 1 && *(bool *)PyArray_GETPTR2(mask, y, x + 1)) {
-        neighbors++;
-    }
-    return neighbors > 0;
+    return 0;
 }
+
+
+/*
+ * Completes one iteration of gradient descent:
+ *   1. Calculates revised values of solution.
+ *   2. Re-calculates error after revising solution.
+ *
+ * @return       Re-calculated error of revised solution
+ * @side-effect  Sets arr_solution to new PyArrayObject with revised values
+ */
+float
+Quickdescent::descend() {
+    PyArrayObject *temp_solution; // TODO: Allocate new array for new values
+
+    npy_intp y, x;
+    npy_intp *dims = PyArray_DIMS(arr_mask);
+
+    #pragma omp parallel for
+    for (y = 0; y < dims[0]; y++) {
+        for (x = 0; x < dims[1]; x++) {
+            // TODO: Calculate new value at each pixel (y, x) and assign
+            // to temp_solution[y][x]
+        }
+    }
+
+    float error = 0.0;
+    #pragma omp parallel for reduction(+:error)
+    for (y = 0; y < dims[0]; y++) {
+        for (x = 0; x < dims[1]; x++) {
+            error += calcErrorForPixel(y, x);
+        }
+    }
+    return error;
+}
+
+
+PyObject *poisson_blend(PyObject *self, PyObject *args) {
+    Quickdescent quickdescent;
+
+    if (!quickdescent.parseArgs(args))
+        Py_RETURN_NONE;
+
+    if (!quickdescent.initializeGuess())
+        Py_RETURN_NONE;
+
+    const float epsilon = 0.0001;
+    float error = quickdescent.descend(), previous_error, delta_error;
+    do {
+        previous_error = error;
+        error = quickdescent.descend();
+        delta_error = error - previous_error;
+    } while (delta_error > epsilon || delta_error < -epsilon);
+    // TODO: Shouldn't we also stop if the error is increasing?
+
+    Py_RETURN_NONE;
+}
+
+
+/*==========HELPER METHODS==========*/
 
 
 /*
  * Averages the values of border pixels.
  *
- * @param im 2D array of pixel values (may be source or target image)
- * @return   Average of border values
+ * @param im  2D array of pixel values (may be source or target image)
+ * @return    Average of border values
  */
 float
 Quickdescent::averageBorderValue(PyArrayObject *im) {
@@ -133,53 +233,75 @@ Quickdescent::averageBorderValue(PyArrayObject *im) {
 
 
 /*
- * Computes the starting point for gradient descent based on the following
- * heuristic. We start off the solution values to the source pixel values
- * plus the difference between the average border value of the target and
- * source images. This has the effect of bringing us closer to the final
- * pixel values by maintaining the gradients of the source image while bringing
- * the border values closer to the target/destination image.
+ * Calculates error contributed by specified inner pixel i. For each neighbor j
+ * of the specified pixel, add:
+ *   - ((v_i - v_j) - (s_i - s_j)) ^ 2  if j is inner pixel
+ *   - ((v_i - t_j) - (s_i - s_j)) ^ 2  if j is border pixel
+ * where v_k is value of pixel k in the solution image,
+ *       s_k is value of pixel k in the source image,
+ *       t_k is value of pixel k in the target image.
  *
- * @return      Designates a successful initialization
- * @side-effect Sets the values of arr_solution
+ * @param y  y-coordinate of inner pixel being considered
+ * @param x  x-coordinate of inner pixel being considered
+ * @return   Error contributed by pixel
  */
-int
-Quickdescent::initializeGuess() {
-    float targetAvg = averageBorderValue(arr_tinyt);
-    float sourceAvg = averageBorderValue(arr_source);
-    float avgDiff = targetAvg - sourceAvg;
+float
+Quickdescent::calcErrorForPixel(npy_intp y, npy_intp x) {
+    float totalError = 0.0;
+    float solutionPixel = *(float *)PyArray_GETPTR2(arr_solution, y, x);
+    float sourcePixel = *(float *)PyArray_GETPTR2(arr_source, y, x);
+    totalError += calcErrorForPixelNeighbor(solutionPixel, sourcePixel,
+                                            y - 1, x);
+    totalError += calcErrorForPixelNeighbor(solutionPixel, sourcePixel,
+                                            y + 1, x);
+    totalError += calcErrorForPixelNeighbor(solutionPixel, sourcePixel,
+                                            y, x - 1);
+    totalError += calcErrorForPixelNeighbor(solutionPixel, sourcePixel,
+                                            y, x + 1);
+    return totalError;
+}
 
-    npy_intp y, x;
+
+/*
+ * Calculates error contributed by gradients between inner pixel i and
+ * neighbor pixel j.
+ *   - ((v_i - v_j) - (s_i - s_j)) ^ 2  if j is inner pixel
+ *   - ((v_i - t_j) - (s_i - s_j)) ^ 2  if j is border pixel
+ * where v_k is value of pixel k in the solution image,
+ *       s_k is value of pixel k in the source image,
+ *       t_k is value of pixel k in the target image.
+ *
+ * @param solutionPixel  v_i
+ * @param sourcePixel    s_i
+ * @param y              y-coordinate of neighbor pixel being considered
+ * @param x              x-coordinate of neighbor pixel being considered
+ * @return               Error contributed by neighbor pixel
+ */
+float
+Quickdescent::calcErrorForPixelNeighbor(float solutionPixel, float sourcePixel,
+                                        npy_intp y, npy_intp x) {
     npy_intp *dims = PyArray_DIMS(arr_mask);
-    for (y = 0; y < dims[0]; y++) {
-        for (x = 0; x < dims[1]; x++) {
-            float sourceVal = *(float *)PyArray_GETPTR2(arr_source, y, x);
-            *(float*)PyArray_GETPTR2(arr_solution, y, x) = sourceVal + avgDiff;
-        }
+    if (y < 0 || y >= dims[0] || x < 0 || x >= dims[1]) {
+        return 0.0;
     }
-    return 0;
+
+    float sourceNeighborPixel = *(float *)PyArray_GETPTR2(arr_source, y, x);
+    float otherNeighborPixel;
+
+    if (*(bool *)PyArray_GETPTR2(arr_mask, y, x)) {
+        otherNeighborPixel = *(float *)PyArray_GETPTR2(arr_solution, y, x);
+    } else {
+        otherNeighborPixel = *(float *)PyArray_GETPTR2(arr_tinyt, y, x);
+    }
+
+    float solutionDiff = solutionPixel - otherNeighborPixel;
+    float sourceDiff = sourcePixel - sourceNeighborPixel;
+    float error = solutionDiff - sourceDiff;
+    return error * error;
 }
 
 
-PyObject *poisson_blend(PyObject *self, PyObject *args) {
-    Quickdescent quickdescent;
-
-    if (!quickdescent.parseArgs(args))
-        Py_RETURN_NONE;
-
-    if (!quickdescent.initializeGuess())
-        Py_RETURN_NONE;
-
-    const float epsilon = 0.0001;
-    float error = quickdescent.descend(), previous_error, delta_error;
-    do {
-        previous_error = error;
-        error = quickdescent.descend();
-        delta_error = error - previous_error;
-    } while (delta_error > epsilon || delta_error < -epsilon);
-
-    Py_RETURN_NONE;
-}
+/*==========SETUP==========*/
 
 
 static PyMethodDef functions[] = {
