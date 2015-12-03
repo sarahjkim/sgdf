@@ -75,4 +75,3 @@ class BaseFusion(object):
 
         """
         raise RuntimeError("Unimplemented method")
-

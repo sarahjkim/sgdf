@@ -7,8 +7,10 @@ from sgdf.gui.editor import EditorView
 
 
 def main():
+    command_modes = ["gui", "benchmark", "headless"]
+
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", nargs="?", default="gui", choices=["gui", "benchmark", "headless"],
+    parser.add_argument("command", nargs="?", default="gui", choices=command_modes,
                         help="Program mode")
     parser.add_argument("--debug", action="store_true", default=False,
                         help="Turns on debug logging (extra verbose)")

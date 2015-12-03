@@ -1,6 +1,12 @@
 import numpy as np
-import sgdf.fusion.alternatives._quickdescent as _quickdescent
 from sgdf.fusion.alternatives.reference import ReferenceFusion
+
+try:
+    import sgdf.fusion.alternatives._quickdescent as _quickdescent
+except ImportError:
+    raise RuntimeError("Failed to import _quickdescent module.\n\n"
+                       "    You need to build the _quickdescent native extension first.\n"
+                       "    Please run './setup.py build_ext --inplace' in the project root.\n")
 
 
 class QuickdescentFusion(ReferenceFusion):
