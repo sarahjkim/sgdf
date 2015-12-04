@@ -32,6 +32,11 @@ class Quickdescent {
                                         npy_intp y, npy_intp x);
         float descend();
         inline bool isBorder(npy_intp y, npy_intp x);
+        inline float getSource(const npy_intp y, const npy_intp x);
+        inline bool getMask(const npy_intp y, const npy_intp x);
+        inline float getTarget(const npy_intp y, const npy_intp x);
+        inline float &getSolution(const npy_intp y, const npy_intp x);
+        inline float &getErrorlog(const npy_intp n);
 };
 
 
@@ -47,25 +52,60 @@ inline bool
 Quickdescent::isBorder(npy_intp y, npy_intp x) {
     assert(y < 0 || y >= shape[0] || x < 0 || x >= shape[1]);
 
-    bool isInner = *(bool *)PyArray_GETPTR2(arr_mask, y, x);
+    bool isInner = getMask(y, x);
     if (isInner) {
         return false;
     }
 
     int neighbors = 0;
-    if (y > 0 && *(bool *)PyArray_GETPTR2(arr_mask, y - 1, x)) {
+    if (y > 0 && getMask(y - 1, x)) {
         neighbors++;
     }
-    if (y < shape[0] - 1 && *(bool *)PyArray_GETPTR2(arr_mask, y + 1, x)) {
+    if (y < shape[0] - 1 && getMask(y + 1, x)) {
         neighbors++;
     }
-    if (x > 0 && *(bool *)PyArray_GETPTR2(arr_mask, y, x - 1)) {
+    if (x > 0 && getMask(y, x - 1)) {
         neighbors++;
     }
-    if (x < shape[1] - 1 && *(bool *)PyArray_GETPTR2(arr_mask, y, x + 1)) {
+    if (x < shape[1] - 1 && getMask(y, x + 1)) {
         neighbors++;
     }
     return neighbors > 0;
+}
+
+
+/* Returns a pixel in arr_source. */
+inline float
+Quickdescent::getSource(const npy_intp y, const npy_intp x) {
+    return *(float *)PyArray_GETPTR2(arr_source, y, x);
+}
+
+
+/* Returns a pixel in arr_mask. */
+inline bool
+Quickdescent::getMask(const npy_intp y, const npy_intp x) {
+    return *(bool *)PyArray_GETPTR2(arr_mask, y, x);
+}
+
+
+/* Returns a pixel in arr_tinyt. */
+inline float
+Quickdescent::getTarget(const npy_intp y, const npy_intp x) {
+    return *(float *)PyArray_GETPTR2(arr_tinyt, y, x);
+}
+
+
+/* Returns a reference to a pixel in arr_solution. */
+inline float &
+Quickdescent::getSolution(const npy_intp y, const npy_intp x) {
+    return *(float *)PyArray_GETPTR2(arr_solution, y, x);
+}
+
+
+/* Returns a reference to a pixel in arr_errorlog. */
+inline float &
+Quickdescent::getErrorlog(const npy_intp n) {
+    return *(float *)PyArray_GETPTR1(arr_errorlog, n);
 }
 
 
@@ -156,8 +196,8 @@ Quickdescent::initializeGuess() {
     npy_intp y, x;
     for (y = 0; y < shape[0]; y++) {
         for (x = 0; x < shape[1]; x++) {
-            float sourceVal = *(float *)PyArray_GETPTR2(arr_source, y, x);
-            *(float*)PyArray_GETPTR2(arr_solution, y, x) = sourceVal + avgDiff;
+            float sourceVal = getSource(y, x);
+            getSolution(y, x) = sourceVal + avgDiff;
         }
     }
     return 0;
@@ -195,7 +235,7 @@ Quickdescent::blend() {
     float error, previous_error, delta_error;
     for (int iterations = 0; iterations < max_iterations; iterations++) {
         error = descend();
-        *((float *) PyArray_GETPTR1(arr_errorlog, iterations)) = error;
+        getErrorlog(iterations) = error;
         if (iterations > 0) {
             delta_error = error - previous_error;
             if (fabs(delta_error) <= epsilon)
@@ -256,8 +296,8 @@ Quickdescent::descend() {
 float
 Quickdescent::calcErrorForPixel(npy_intp y, npy_intp x) {
     float totalError = 0.0;
-    float solutionPixel = *(float *)PyArray_GETPTR2(arr_solution, y, x);
-    float sourcePixel = *(float *)PyArray_GETPTR2(arr_source, y, x);
+    float solutionPixel = getSolution(y, x);
+    float sourcePixel = getSource(y, x);
     totalError += calcErrorForPixelNeighbor(solutionPixel, sourcePixel,
                                             y - 1, x);
     totalError += calcErrorForPixelNeighbor(solutionPixel, sourcePixel,
@@ -292,13 +332,13 @@ Quickdescent::calcErrorForPixelNeighbor(float solutionPixel, float sourcePixel,
         return 0.0;
     }
 
-    float sourceNeighborPixel = *(float *)PyArray_GETPTR2(arr_source, y, x);
+    float sourceNeighborPixel = getSource(y, x);
     float otherNeighborPixel;
 
-    if (*(bool *)PyArray_GETPTR2(arr_mask, y, x)) {
-        otherNeighborPixel = *(float *)PyArray_GETPTR2(arr_solution, y, x);
+    if (getMask(y, x)) {
+        otherNeighborPixel = getSolution(y, x);
     } else {
-        otherNeighborPixel = *(float *)PyArray_GETPTR2(arr_tinyt, y, x);
+        otherNeighborPixel = getTarget(y, x);
     }
 
     float solutionDiff = solutionPixel - otherNeighborPixel;
