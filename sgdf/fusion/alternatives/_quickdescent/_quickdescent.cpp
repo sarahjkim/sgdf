@@ -1,6 +1,7 @@
 #define NPY_NO_DEPRECATED_API NPY_1_10_API_VERSION
 
 #include <array>
+#include <cassert>
 #include <cstdlib>
 #include <iostream>
 #include "Python.h"
@@ -14,7 +15,6 @@
 class Quickdescent {
         PyArrayObject *arr_source, *arr_mask, *arr_tinyt, *arr_solution;
         size_t shape[2];
-        bool* border_mask;
 
         float epsilon;
         int max_iterations;
@@ -45,9 +45,7 @@ class Quickdescent {
  */
 inline bool
 Quickdescent::isBorder(npy_intp y, npy_intp x) {
-    if (y < 0 || y >= shape[0] || x < 0 || x >= shape[1]) {
-        return false;
-    }
+    assert(y < 0 || y >= shape[0] || x < 0 || x >= shape[1]);
 
     bool isInner = *(bool *)PyArray_GETPTR2(arr_mask, y, x);
     if (isInner) {
@@ -75,8 +73,7 @@ Quickdescent::isBorder(npy_intp y, npy_intp x) {
  * Parses arguments given to poisson_blend.
  *
  * @return       Designates successfully parsing the arguments
- * @side-effect  Sets the values of arr_source, arr_mask, arr_tinyt,
- *               arr_solution, and border_mask
+ * @side-effect  Sets up the parameters of Quickdescent.
  */
 int
 Quickdescent::parseArgs(PyObject *args) {
@@ -135,17 +132,6 @@ Quickdescent::parseArgs(PyObject *args) {
         }
     }
 
-    // Set up border_mask
-    npy_intp y, x;
-    border_mask = new bool[shape[0] * shape[1]]();
-    for (y = 0; y < shape[0]; y++) {
-        for (x = 0; x < shape[1]; x++) {
-            if (isBorder(y, x)) {
-                border_mask[y * shape[1] + x] = true;
-            }
-        }
-    }
-
     return 0;
 }
 
@@ -173,6 +159,49 @@ Quickdescent::initializeGuess() {
             float sourceVal = *(float *)PyArray_GETPTR2(arr_source, y, x);
             *(float*)PyArray_GETPTR2(arr_solution, y, x) = sourceVal + avgDiff;
         }
+    }
+    return 0;
+}
+
+
+/*
+ * Averages the values of border pixels.
+ *
+ * @param im  2D array of pixel values (may be source or target image)
+ * @return    Average of border values
+ */
+float
+Quickdescent::averageBorderValue(PyArrayObject *im) {
+    npy_intp y, x;
+
+    float total = 0.0;
+    int n = 0;
+    for (y = 0; y < shape[0]; y++) {
+        for (x = 0; x < shape[1]; x++) {
+            if (isBorder(y, x)) {
+                total += *(float *)PyArray_GETPTR2(im, y, x);
+                n += 1;
+            }
+        }
+    }
+
+    if (n == 0) return 0.0;
+    else return total/n;
+}
+
+
+int
+Quickdescent::blend() {
+    float error, previous_error, delta_error;
+    for (int iterations = 0; iterations < max_iterations; iterations++) {
+        error = descend();
+        *((float *) PyArray_GETPTR1(arr_errorlog, iterations)) = error;
+        if (iterations > 0) {
+            delta_error = error - previous_error;
+            if (fabs(delta_error) <= epsilon)
+                break;
+        }
+        previous_error = error;
     }
     return 0;
 }
@@ -208,49 +237,6 @@ Quickdescent::descend() {
         }
     }
     return error;
-}
-
-
-int
-Quickdescent::blend() {
-    float error, previous_error, delta_error;
-    for (int iterations = 0; iterations < max_iterations; iterations++) {
-        error = descend();
-        *((float *) PyArray_GETPTR1(arr_errorlog, iterations)) = error;
-        if (iterations > 0) {
-            delta_error = error - previous_error;
-            if (fabs(delta_error) <= epsilon)
-                break;
-        }
-        previous_error = error;
-    }
-    return 0;
-}
-
-
-/*
- * Averages the values of border pixels.
- *
- * @param im  2D array of pixel values (may be source or target image)
- * @return    Average of border values
- */
-float
-Quickdescent::averageBorderValue(PyArrayObject *im) {
-    npy_intp y, x;
-
-    float total = 0.0;
-    int n = 0;
-    for (y = 0; y < shape[0]; y++) {
-        for (x = 0; x < shape[1]; x++) {
-            if (border_mask[y * shape[1] + x]) {
-                total += *(float *)PyArray_GETPTR2(im, y, x);
-                n += 1;
-            }
-        }
-    }
-
-    if (n == 0) return 0.0;
-    else return total/n;
 }
 
 
