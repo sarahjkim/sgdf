@@ -63,7 +63,7 @@ class ReferenceFusion(BaseFusion):
             self.active = False
 
     def get_fusion(self):
-        with log_timer("ReferenceFusion.get_fusion"):
+        with log_timer("%s.get_fusion" % self.__class__.__name__):
             target = np.copy(self.canvas)
             if not self.active:
                 return target

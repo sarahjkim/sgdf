@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cassert>
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include "Python.h"
@@ -13,7 +14,7 @@
 
 
 class Quickdescent {
-        PyArrayObject *arr_source, *arr_mask, *arr_tinyt, *arr_solution;
+        PyArrayObject *arr_source, *arr_mask, *arr_tinyt, *arr_solution, *arr_scratch;
         size_t shape[2];
 
         float epsilon;
@@ -27,15 +28,13 @@ class Quickdescent {
         int blend();
     private:
         float averageBorderValue(PyArrayObject *im);
-        float calcErrorForPixel(npy_intp y, npy_intp x);
-        float calcErrorForPixelNeighbor(float solutionPixel, float sourcePixel,
-                                        npy_intp y, npy_intp x);
-        float descend();
+        float descend(float learning_rate);
         inline bool isBorder(npy_intp y, npy_intp x);
         inline float getSource(const npy_intp y, const npy_intp x);
         inline bool getMask(const npy_intp y, const npy_intp x);
         inline float getTarget(const npy_intp y, const npy_intp x);
         inline float &getSolution(const npy_intp y, const npy_intp x);
+        inline float &getScratch(const npy_intp y, const npy_intp x);
         inline float &getErrorlog(const npy_intp n);
 };
 
@@ -102,6 +101,13 @@ Quickdescent::getSolution(const npy_intp y, const npy_intp x) {
 }
 
 
+/* Returns a reference to a pixel in arr_scratch. */
+inline float &
+Quickdescent::getScratch(const npy_intp y, const npy_intp x) {
+    return *(float *)PyArray_GETPTR2(arr_scratch, y, x);
+}
+
+
 /* Returns a reference to a pixel in arr_errorlog. */
 inline float &
 Quickdescent::getErrorlog(const npy_intp n) {
@@ -117,10 +123,10 @@ Quickdescent::getErrorlog(const npy_intp n) {
  */
 int
 Quickdescent::parseArgs(PyObject *args) {
-    PyObject *arg_source, *arg_mask, *arg_tinyt, *arg_solution, *arg_errorlog;
-    if (!PyArg_ParseTuple(args, "OOOO!O!fi", &arg_source, &arg_mask, &arg_tinyt,
-                          &PyArray_Type, &arg_solution, &PyArray_Type, &arg_errorlog,
-                          &epsilon, &max_iterations)) {
+    PyObject *arg_source, *arg_mask, *arg_tinyt, *arg_solution, *arg_errorlog, *arg_scratch;
+    if (!PyArg_ParseTuple(args, "OOOO!O!O!fi", &arg_source, &arg_mask, &arg_tinyt,
+                          &PyArray_Type, &arg_solution, &PyArray_Type, &arg_scratch,
+                          &PyArray_Type, &arg_errorlog, &epsilon, &max_iterations)) {
         return 1;
     }
 
@@ -128,9 +134,14 @@ Quickdescent::parseArgs(PyObject *args) {
     arr_mask = (PyArrayObject *) PyArray_FROM_OTF(arg_mask, NPY_BOOL, NPY_ARRAY_IN_ARRAY);
     arr_tinyt = (PyArrayObject *) PyArray_FROM_OTF(arg_tinyt, NPY_FLOAT, NPY_ARRAY_IN_ARRAY);
     arr_solution = (PyArrayObject *) PyArray_FROM_OTF(arg_solution, NPY_FLOAT, NPY_ARRAY_INOUT_ARRAY);
+    arr_scratch = (PyArrayObject *) PyArray_FROM_OTF(arg_scratch, NPY_FLOAT, NPY_ARRAY_INOUT_ARRAY);
 
     // Extra error checking for Numpy input arrays
-    std::array<PyArrayObject *, 4> ndarray_args = {{arr_source, arr_mask, arr_tinyt, arr_solution}};
+    std::array<PyArrayObject *, 5> ndarray_args = {{arr_source,
+                                                    arr_mask,
+                                                    arr_tinyt,
+                                                    arr_solution,
+                                                    arr_scratch}};
     for (int i = 0; i < ndarray_args.size(); i++) {
         PyArrayObject *ndarray_arg = ndarray_args[i];
         if (ndarray_arg == NULL) {
@@ -189,15 +200,22 @@ Quickdescent::parseArgs(PyObject *args) {
  */
 int
 Quickdescent::initializeGuess() {
-    float targetAvg = averageBorderValue(arr_tinyt);
-    float sourceAvg = averageBorderValue(arr_source);
-    float avgDiff = targetAvg - sourceAvg;
+    float average_target = averageBorderValue(arr_tinyt);
+    float average_source = averageBorderValue(arr_source);
+    float average_delta = average_target - average_source;
 
     npy_intp y, x;
+    float pixel_value;
     for (y = 0; y < shape[0]; y++) {
         for (x = 0; x < shape[1]; x++) {
-            float sourceVal = getSource(y, x);
-            getSolution(y, x) = sourceVal + avgDiff;
+            if (getMask(y, x)) {
+                pixel_value = getSource(y, x) + average_delta;
+                if (pixel_value < 0.0) pixel_value = 0.0;
+                if (pixel_value > 1.0) pixel_value = 1.0;
+                getSolution(y, x) = pixel_value;
+            } else {
+                getSolution(y, x) = getTarget(y, x);
+            }
         }
     }
     return 0;
@@ -214,7 +232,7 @@ float
 Quickdescent::averageBorderValue(PyArrayObject *im) {
     npy_intp y, x;
 
-    float total = 0.0;
+    double total = 0.0;
     int n = 0;
     for (y = 0; y < shape[0]; y++) {
         for (x = 0; x < shape[1]; x++) {
@@ -226,17 +244,19 @@ Quickdescent::averageBorderValue(PyArrayObject *im) {
     }
 
     if (n == 0) return 0.0;
-    else return total/n;
+    else return (float) total/n;
 }
 
 
 int
 Quickdescent::blend() {
     float error, previous_error, delta_error;
-    for (int iterations = 0; iterations < max_iterations; iterations++) {
-        error = descend();
-        getErrorlog(iterations) = error;
-        if (iterations > 0) {
+    float learning_rate;
+    for (int iteration = 0; iteration < max_iterations; iteration++) {
+        learning_rate = 5.0 * max_iterations / (max_iterations + iteration);
+        error = descend(learning_rate);
+        getErrorlog(iteration) = error;
+        if (iteration > 0) {
             delta_error = error - previous_error;
             if (fabs(delta_error) <= epsilon)
                 break;
@@ -256,95 +276,71 @@ Quickdescent::blend() {
  * @side-effect  Sets arr_solution to new PyArrayObject with revised values
  */
 float
-Quickdescent::descend() {
-    PyArrayObject *temp_solution; // TODO: Allocate new array for new values
-
+Quickdescent::descend(float learning_rate) {
     npy_intp y, x;
+    double total_error = 0, total_dfdp = 0;
 
-    #pragma omp parallel for
+    #pragma omp parallel for reduction(+:total_error)
     for (y = 0; y < shape[0]; y++) {
         for (x = 0; x < shape[1]; x++) {
-            // TODO: Calculate new value at each pixel (y, x) and assign
-            // to temp_solution[y][x]
+            double dfdp = 0;
+
+            #define append_error(e) do { \
+                double e_ = (e); \
+                dfdp += e_; \
+                total_error += e_ * e_; \
+            } while (0)
+
+            if (getMask(y, x)) {
+                float solution_p = getSolution(y, x);
+                float source_p = getSource(y, x);
+                if (y > 0) {
+                    append_error((solution_p - getSolution(y - 1, x)) - (source_p - getSource(y - 1, x)));
+                }
+                if (x > 0) {
+                    append_error((solution_p - getSolution(y, x - 1)) - (source_p - getSource(y, x - 1)));
+                }
+                if (y < shape[0] - 1) {
+                    append_error((solution_p - getSolution(y + 1, x)) - (source_p - getSource(y + 1, x)));
+                }
+                if (x < shape[1] - 1) {
+                    append_error((solution_p - getSolution(y, x + 1)) - (source_p - getSource(y, x + 1)));
+                }
+            } else if (isBorder(y, x)) {
+                dfdp = 4 * (getSolution(y, x) - getTarget(y, x));
+            } else {
+                float solution_p = getSolution(y, x);
+                float target_p = getTarget(y, x);
+                if (y > 0) {
+                    append_error((solution_p - getSolution(y - 1, x)) - (target_p - getTarget(y - 1, x)));
+                }
+                if (x > 0) {
+                    append_error((solution_p - getSolution(y, x - 1)) - (target_p - getTarget(y, x - 1)));
+                }
+                if (y < shape[0] - 1) {
+                    append_error((solution_p - getSolution(y + 1, x)) - (target_p - getTarget(y + 1, x)));
+                }
+                if (x < shape[1] - 1) {
+                    append_error((solution_p - getSolution(y, x + 1)) - (target_p - getTarget(y, x + 1)));
+                }
+            }
+
+            #undef append_error
+
+            getScratch(y, x) = dfdp;
+            total_dfdp += fabs(dfdp);
         }
     }
 
-    float error = 0.0;
-    #pragma omp parallel for reduction(+:error)
-    for (y = 0; y < shape[0]; y++) {
-        for (x = 0; x < shape[1]; x++) {
-            error += calcErrorForPixel(y, x);
+    if (total_dfdp > 0) {
+        for (y = 0; y < shape[0]; y++) {
+            for (x = 0; x < shape[1]; x++) {
+                getSolution(y, x) -= getScratch(y, x) * learning_rate / total_dfdp;
+            }
         }
     }
-    return error;
-}
 
-
-/*
- * Calculates error contributed by specified inner pixel i. For each neighbor j
- * of the specified pixel, add:
- *   - ((v_i - v_j) - (s_i - s_j)) ^ 2  if j is inner pixel
- *   - ((v_i - t_j) - (s_i - s_j)) ^ 2  if j is border pixel
- * where v_k is value of pixel k in the solution image,
- *       s_k is value of pixel k in the source image,
- *       t_k is value of pixel k in the target image.
- *
- * @param y  y-coordinate of inner pixel being considered
- * @param x  x-coordinate of inner pixel being considered
- * @return   Error contributed by pixel
- */
-float
-Quickdescent::calcErrorForPixel(npy_intp y, npy_intp x) {
-    float totalError = 0.0;
-    float solutionPixel = getSolution(y, x);
-    float sourcePixel = getSource(y, x);
-    totalError += calcErrorForPixelNeighbor(solutionPixel, sourcePixel,
-                                            y - 1, x);
-    totalError += calcErrorForPixelNeighbor(solutionPixel, sourcePixel,
-                                            y + 1, x);
-    totalError += calcErrorForPixelNeighbor(solutionPixel, sourcePixel,
-                                            y, x - 1);
-    totalError += calcErrorForPixelNeighbor(solutionPixel, sourcePixel,
-                                            y, x + 1);
-    return totalError;
-}
-
-
-/*
- * Calculates error contributed by gradients between inner pixel i and
- * neighbor pixel j.
- *   - ((v_i - v_j) - (s_i - s_j)) ^ 2  if j is inner pixel
- *   - ((v_i - t_j) - (s_i - s_j)) ^ 2  if j is border pixel
- * where v_k is value of pixel k in the solution image,
- *       s_k is value of pixel k in the source image,
- *       t_k is value of pixel k in the target image.
- *
- * @param solutionPixel  v_i
- * @param sourcePixel    s_i
- * @param y              y-coordinate of neighbor pixel being considered
- * @param x              x-coordinate of neighbor pixel being considered
- * @return               Error contributed by neighbor pixel
- */
-float
-Quickdescent::calcErrorForPixelNeighbor(float solutionPixel, float sourcePixel,
-                                        npy_intp y, npy_intp x) {
-    if (y < 0 || y >= shape[0] || x < 0 || x >= shape[1]) {
-        return 0.0;
-    }
-
-    float sourceNeighborPixel = getSource(y, x);
-    float otherNeighborPixel;
-
-    if (getMask(y, x)) {
-        otherNeighborPixel = getSolution(y, x);
-    } else {
-        otherNeighborPixel = getTarget(y, x);
-    }
-
-    float solutionDiff = solutionPixel - otherNeighborPixel;
-    float sourceDiff = sourcePixel - sourceNeighborPixel;
-    float error = solutionDiff - sourceDiff;
-    return error * error;
+    return total_error;
 }
 
 
