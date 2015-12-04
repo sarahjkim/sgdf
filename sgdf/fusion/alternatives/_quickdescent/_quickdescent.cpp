@@ -15,18 +15,23 @@ class Quickdescent {
         PyArrayObject *arr_source, *arr_mask, *arr_tinyt, *arr_solution;
         size_t shape[2];
         bool* border_mask;
+
+        float epsilon;
+        int max_iterations;
+        PyArrayObject *arr_errorlog;
     public:
         Quickdescent() {};
         ~Quickdescent() {};
         int parseArgs(PyObject *args);
         int initializeGuess();
-        float descend();
-        inline bool isBorder(npy_intp y, npy_intp x);
+        int blend();
     private:
         float averageBorderValue(PyArrayObject *im);
         float calcErrorForPixel(npy_intp y, npy_intp x);
         float calcErrorForPixelNeighbor(float solutionPixel, float sourcePixel,
                                         npy_intp y, npy_intp x);
+        float descend();
+        inline bool isBorder(npy_intp y, npy_intp x);
 };
 
 
@@ -75,30 +80,17 @@ Quickdescent::isBorder(npy_intp y, npy_intp x) {
  */
 int
 Quickdescent::parseArgs(PyObject *args) {
-    PyObject *arg_source, *arg_mask, *arg_tinyt, *arg_solution;
-    if (!PyArg_ParseTuple(args, "OOOO!", &arg_source, &arg_mask, &arg_tinyt, &PyArray_Type, &arg_solution)) {
+    PyObject *arg_source, *arg_mask, *arg_tinyt, *arg_solution, *arg_errorlog;
+    if (!PyArg_ParseTuple(args, "OOOO!O!fi", &arg_source, &arg_mask, &arg_tinyt,
+                          &PyArray_Type, &arg_solution, &PyArray_Type, &arg_errorlog,
+                          &epsilon, &max_iterations)) {
         return 1;
     }
 
     arr_source = (PyArrayObject *) PyArray_FROM_OTF(arg_source, NPY_FLOAT, NPY_ARRAY_IN_ARRAY);
-    if (arr_source == NULL) {
-        return 1;
-    }
-
     arr_mask = (PyArrayObject *) PyArray_FROM_OTF(arg_mask, NPY_BOOL, NPY_ARRAY_IN_ARRAY);
-    if (arr_mask == NULL) {
-        return 1;
-    }
-
     arr_tinyt = (PyArrayObject *) PyArray_FROM_OTF(arg_tinyt, NPY_FLOAT, NPY_ARRAY_IN_ARRAY);
-    if (arr_tinyt == NULL) {
-        return 1;
-    }
-
     arr_solution = (PyArrayObject *) PyArray_FROM_OTF(arg_solution, NPY_FLOAT, NPY_ARRAY_INOUT_ARRAY);
-    if (arr_solution == NULL) {
-        return 1;
-    }
 
     // Extra error checking for Numpy input arrays
     std::array<PyArrayObject *, 4> ndarray_args = {{arr_source, arr_mask, arr_tinyt, arr_solution}};
@@ -121,6 +113,25 @@ Quickdescent::parseArgs(PyObject *args) {
                 PyErr_Format(PyExc_ValueError, "Dimension mismatch: %ldx%ld and %zux%zu", dims[0], dims[1], shape[0], shape[1]);
                 return 1;
             }
+        }
+    }
+
+    {
+        arr_errorlog = (PyArrayObject *) PyArray_FROM_OTF(arg_errorlog, NPY_FLOAT, NPY_ARRAY_INOUT_ARRAY);
+        if (arr_errorlog == NULL) {
+            return 1;
+        }
+        if (PyArray_NDIM(arr_errorlog) != 1) {
+            PyErr_SetString(PyExc_ValueError, "Error log should be a 1 dimensional array.");
+            return 1;
+        }
+
+        npy_intp *dims = PyArray_DIMS(arr_errorlog);
+        if (max_iterations == 0) {
+            max_iterations = dims[0];
+        } else if (max_iterations != dims[0]) {
+            PyErr_SetString(PyExc_ValueError, "Error log should be the same size as max_iterations.");
+            return 1;
         }
     }
 
@@ -200,26 +211,20 @@ Quickdescent::descend() {
 }
 
 
-PyObject *
-poisson_blend(PyObject *self, PyObject *args) {
-    Quickdescent quickdescent;
-
-    if (quickdescent.parseArgs(args))
-        return NULL;
-
-    if (quickdescent.initializeGuess())
-        return NULL;
-
-    const float epsilon = 0.0001;
-    float error = quickdescent.descend(), previous_error, delta_error;
-    do {
+int
+Quickdescent::blend() {
+    float error, previous_error, delta_error;
+    for (int iterations = 0; iterations < max_iterations; iterations++) {
+        error = descend();
+        *((float *) PyArray_GETPTR1(arr_errorlog, iterations)) = error;
+        if (iterations > 0) {
+            delta_error = error - previous_error;
+            if (fabs(delta_error) <= epsilon)
+                break;
+        }
         previous_error = error;
-        error = quickdescent.descend();
-        delta_error = error - previous_error;
-    } while (delta_error > epsilon || delta_error < -epsilon);
-    // TODO: Shouldn't we also stop if the error is increasing?
-
-    Py_RETURN_NONE;
+    }
+    return 0;
 }
 
 
@@ -314,6 +319,23 @@ Quickdescent::calcErrorForPixelNeighbor(float solutionPixel, float sourcePixel,
     float sourceDiff = sourcePixel - sourceNeighborPixel;
     float error = solutionDiff - sourceDiff;
     return error * error;
+}
+
+
+PyObject *
+poisson_blend(PyObject *self, PyObject *args) {
+    Quickdescent quickdescent;
+
+    if (quickdescent.parseArgs(args))
+        return NULL;
+
+    if (quickdescent.initializeGuess())
+        return NULL;
+
+    if (quickdescent.blend())
+        return NULL;
+
+    Py_RETURN_NONE;
 }
 
 

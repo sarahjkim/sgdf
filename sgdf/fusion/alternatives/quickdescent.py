@@ -18,9 +18,10 @@ class QuickdescentFusion(ReferenceFusion):
         """
         ReferenceFusion.__init__(self)
 
-    def poisson_blend(self, source, mask, tinyt):
+    def poisson_blend(self, source, mask, tinyt, max_iterations=1):
         assert source.shape == mask.shape == tinyt.shape
         assert len(source.shape) == 2
         solution = np.ndarray(tinyt.shape, dtype=np.float32)
-        _quickdescent.poisson_blend(source, mask, tinyt, solution)
+        errorlog = np.zeros(max_iterations, dtype=np.float32)
+        _quickdescent.poisson_blend(source, mask, tinyt, solution, errorlog, 0.0001, max_iterations)
         return solution
