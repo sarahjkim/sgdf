@@ -121,7 +121,8 @@ class ReferenceFusion(BaseFusion):
 
     def construct_A4(self, source, mask_border=[[]]):
         source_h, source_w = source.shape
-        sy, sx = np.nonzero(mask_border)
+        border_y, border_x = np.nonzero(mask_border)
+        border_indexes = source_w*border_y + border_x
         source_size = source_h*source_w
         # [x,x+1], [x,x-1], [y,y+1], [y,y-1]
         all_offsets = [[0, -1], [0, 1], [0, -source_w], [0, source_w]]
@@ -132,8 +133,19 @@ class ReferenceFusion(BaseFusion):
                       shape=[source_size, source_size],
                       format='csr',
                       dtype=float)
-            r, c = (A[source_w*sy + sx, :] < 0).nonzero()
-            A[(source_w*sy + sx)[r], c] = 0
+            minus_r, minus_c = (A[border_indexes, :] < 0).nonzero()
+
+            # Any constraints that are of the form v[N] = s[N] are spurious and should be suppressed
+            # Border pixels need to have a v[N] = t[N] constraint.
+            # We take the set difference, in order to prevent messing with pixels that are both
+            #     border and spurious.
+            spurious_rows = np.setdiff1d(A.sum(axis=1).nonzero()[0], border_indexes)
+            spurious_cells_r, spurious_cells_c = (A[spurious_rows, :] > 0).nonzero()
+            A[spurious_rows[spurious_cells_r], spurious_cells_c] = 0
+
+            # This is the original code that modifies border pixels to have a v[N] = t[N] constraint
+            A[border_indexes[minus_r], minus_c] = 0
+
             As.append(A)
         return vstack(As)
 
