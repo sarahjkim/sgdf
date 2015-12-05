@@ -19,7 +19,14 @@ class Quickdescent {
         PyArrayObject *arr_errorlog;
     public:
         Quickdescent() {};
-        ~Quickdescent() {};
+        ~Quickdescent() {
+            Py_XDECREF(arr_source);
+            Py_XDECREF(arr_mask);
+            Py_XDECREF(arr_tinyt);
+            Py_XDECREF(arr_solution);
+            Py_XDECREF(arr_scratch);
+            Py_XDECREF(arr_errorlog);
+        };
         int parseArgs(PyObject *args);
         int initializeGuess();
         int blend();
@@ -44,7 +51,10 @@ typedef struct QuickdescentContext {
 
 static void
 QuickdescentContext_dealloc(QuickdescentContext_object *self) {
-    PyMem_Free(self->quickdescent);
+    if (self->quickdescent) {
+        self->quickdescent->~Quickdescent();
+        PyMem_Free(self->quickdescent);
+    }
     self->ob_type->tp_free((PyObject *)self);
 }
 
@@ -489,27 +499,7 @@ Quickdescent::descend(float learning_rate) {
 }
 
 
-PyObject *
-poisson_blend(PyObject *self, PyObject *args) {
-    Quickdescent quickdescent;
-
-    if (quickdescent.parseArgs(args))
-        return NULL;
-
-    if (quickdescent.initializeGuess())
-        return NULL;
-
-    if (quickdescent.blend())
-        return NULL;
-
-    Py_RETURN_NONE;
-}
-
-
-static PyMethodDef functions[] = {
-    {"poisson_blend", (PyCFunction) poisson_blend, METH_VARARGS},
-    {NULL, NULL}
-};
+static PyMethodDef functions[] = {{NULL}};
 
 
 PyMODINIT_FUNC
