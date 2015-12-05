@@ -1,5 +1,6 @@
 import logging
 import numpy as np
+from sgdf.benchmarking import log_timer
 from sgdf.fusion.alternatives.reference import ReferenceFusion
 
 try:
@@ -21,14 +22,15 @@ class QuickdescentFusion(ReferenceFusion):
         """
         ReferenceFusion.__init__(self)
 
-    def poisson_blend(self, source, mask, tinyt, max_iterations=1000):
+    def poisson_blend(self, source, mask, tinyt, max_iterations=100):
         assert source.shape == mask.shape == tinyt.shape
         assert len(source.shape) == 2
         solution = np.zeros(tinyt.shape, dtype=np.float32)
         scratch = np.zeros(tinyt.shape, dtype=np.float32)
         errorlog = np.zeros(max_iterations, dtype=np.float32)
-        _quickdescent.poisson_blend(source, mask, tinyt, solution, scratch, errorlog, 0.0001,
-                                    max_iterations)
+        with log_timer("%s.native" % self.__class__.__name__):
+            _quickdescent.poisson_blend(source, mask, tinyt, solution, scratch, errorlog, 0.00001,
+                                        max_iterations)
         LOG.debug("Quickdescent iterations: %d" % (errorlog.nonzero()[0][-1] + 1))
         LOG.debug("Final error value: %f" % (errorlog[errorlog.nonzero()[0][-1]]))
         return solution.clip(0, 1)

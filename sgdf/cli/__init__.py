@@ -30,7 +30,7 @@ def main():
         logging.basicConfig(level=logging.INFO)
 
     if args.command == "gui":
-        editor_view = EditorView()
+        editor_view = EditorView(args.algorithm)
         if args.source:
             editor_view.handle_loadsource(image_path=args.source)
         if args.target:

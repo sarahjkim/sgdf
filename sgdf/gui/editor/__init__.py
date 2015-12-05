@@ -14,7 +14,7 @@ _log = logging.getLogger(__name__)
 
 
 class EditorView(object):
-    def __init__(self):
+    def __init__(self, algorithm="reference"):
         """This is the View that renders the main editor window."""
         self.root = tk.Tk()
         self.root.wm_title("Streaming Gradient Domain Fusion")
@@ -57,13 +57,13 @@ class EditorView(object):
         # Set up editor window
         self.frame.pack(fill=tk.BOTH, expand=tk.YES)
         self.root.geometry("1200x500")
-        self.fusion = get_fusion_algorithm("reference")()
+        self.fusion = get_fusion_algorithm(algorithm)()
         self.mask_ndarray = None
         self.source_anchor = None
         self.target_anchor = None
 
         # Set up brush properties
-        self.brush_radius = 5
+        self.brush_radius = 12
         self.brush_circular = False
         self.brush_feathered = False    # TODO: How to make brush actually feathered?
 

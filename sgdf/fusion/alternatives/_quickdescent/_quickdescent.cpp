@@ -253,7 +253,7 @@ Quickdescent::blend() {
     float error, previous_error, delta_error;
     float learning_rate;
     for (int iteration = 0; iteration < max_iterations; iteration++) {
-        learning_rate = 5.0 * max_iterations / (max_iterations + iteration);
+        learning_rate = 100.0 * max_iterations / (max_iterations + 500.0 * iteration);
         error = descend(learning_rate);
         getErrorlog(iteration) = error;
         if (iteration > 0) {
