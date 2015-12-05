@@ -22,7 +22,7 @@ class QuickdescentFusion(ReferenceFusion):
         """
         ReferenceFusion.__init__(self)
 
-    def poisson_blend(self, source, mask, tinyt, max_iterations=100):
+    def poisson_blend(self, source, mask, tinyt, max_iterations=1000):
         assert source.shape == mask.shape == tinyt.shape
         assert len(source.shape) == 2
         solution = np.zeros(tinyt.shape, dtype=np.float32)

@@ -279,6 +279,28 @@ float
 Quickdescent::descend(float learning_rate) {
     npy_intp y, x;
     double total_error = 0, total_dfdp = 0;
+    const size_t y_max = shape[0] - 1;
+    const size_t x_max = shape[1] - 1;
+    const size_t row_size = shape[1];
+    const float *ptr_source = (float *)PyArray_DATA(arr_source);
+    const bool *ptr_mask = (bool *)PyArray_DATA(arr_mask);
+    const float *ptr_tinyt = (float *)PyArray_DATA(arr_tinyt);
+    float *ptr_solution = (float *)PyArray_DATA(arr_solution);
+    float *ptr_scratch = (float *)PyArray_DATA(arr_scratch);
+
+    /* Here are optimized versions of our accessor methods that we use in this tight loop.
+     * The PyArray_FROM_OTF will guarantee that our arrays are C-style contiguous, so we can
+     *     address them directly as arrays.
+     * This optimization provides roughly 2x to 3x improvement in performance.  */
+    #define getSource(y, x) (ptr_source[(y) * row_size + (x)])
+    #define getMask(y, x) (ptr_mask[(y) * row_size + (x)])
+    #define getTarget(y, x) (ptr_tinyt[(y) * row_size + (x)])
+    #define getSolution(y, x) (ptr_solution[(y) * row_size + (x)])
+    #define getScratch(y, x) (ptr_scratch[(y) * row_size + (x)])
+    #define isBorderAssumingNotMask(y, x) ((y > 0 && getMask(y - 1, x)) || \
+                                           (y < y_max && getMask(y - 1, x)) || \
+                                           (x > 0 && getMask(y, x - 1)) || \
+                                           (x < x_max && getMask(y, x + 1)))
 
     #pragma omp parallel for reduction(+:total_error)
     for (y = 0; y < shape[0]; y++) {
@@ -306,7 +328,7 @@ Quickdescent::descend(float learning_rate) {
                 if (x < shape[1] - 1) {
                     append_error((solution_p - getSolution(y, x + 1)) - (source_p - getSource(y, x + 1)));
                 }
-            } else if (isBorder(y, x)) {
+            } else if (isBorderAssumingNotMask(y, x)) {
                 dfdp = 4 * (getSolution(y, x) - getTarget(y, x));
             } else {
                 float solution_p = getSolution(y, x);
@@ -339,6 +361,13 @@ Quickdescent::descend(float learning_rate) {
             }
         }
     }
+
+    #undef getSource
+    #undef getMask
+    #undef getTarget
+    #undef getSolution
+    #undef getScratch
+    #undef isBorderAssumingNotMask
 
     return total_error;
 }
