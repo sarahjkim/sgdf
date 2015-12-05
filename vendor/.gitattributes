@@ -1,2 +1,4 @@
 * -diff
 * linguist-vendored
+.gitattributes diff
+.gitignore diff
