@@ -7,10 +7,7 @@
 #include <iostream>
 #include "Python.h"
 #include "numpy/arrayobject.h"
-
-#ifdef _OPENMP
-#include <omp.h>
-#endif
+#include "structmember.h"
 
 
 class Quickdescent {
@@ -36,6 +33,125 @@ class Quickdescent {
         inline float &getSolution(const npy_intp y, const npy_intp x);
         inline float &getScratch(const npy_intp y, const npy_intp x);
         inline float &getErrorlog(const npy_intp n);
+};
+
+
+typedef struct QuickdescentContext {
+    PyObject_HEAD
+    Quickdescent *quickdescent;
+} QuickdescentContext_object;
+
+
+static void
+QuickdescentContext_dealloc(QuickdescentContext_object *self) {
+    PyMem_Free(self->quickdescent);
+    self->ob_type->tp_free((PyObject *)self);
+}
+
+
+static PyObject *
+QuickdescentContext_new(PyTypeObject *type, PyObject *args, PyObject *kwargs) {
+    QuickdescentContext_object *self = (QuickdescentContext_object *)type->tp_alloc(type, 0);
+    if (self != NULL) {
+        self->quickdescent = (Quickdescent *) PyMem_Malloc(sizeof(Quickdescent));
+        if (self->quickdescent == NULL) {
+            Py_DECREF(self);
+            return NULL;
+        }
+        new (self->quickdescent) Quickdescent();
+    }
+    return (PyObject *)self;
+}
+
+
+static int
+QuickdescentContext_init(QuickdescentContext_object *self, PyObject *args, PyObject *kwargs) {
+    if (self->quickdescent == NULL) {
+        self->quickdescent = (Quickdescent *) PyMem_Malloc(sizeof(Quickdescent));
+        if (self->quickdescent == NULL) {
+            return -1;
+        }
+        new (self->quickdescent) Quickdescent();
+    }
+
+    int success = self->quickdescent->parseArgs(args);
+
+    /* Converting return code conventions. */
+    if (success == 0) {
+        return 0;
+    } else {
+        return -1;
+    }
+}
+
+
+static PyObject *
+QuickdescentContext_initializeGuess(QuickdescentContext_object *self) {
+    if (self->quickdescent->initializeGuess()) {
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
+
+static PyObject *
+QuickdescentContext_blend(QuickdescentContext_object *self) {
+    if (self->quickdescent->blend()) {
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
+
+static PyMethodDef QuickdescentContext_methods[] = {
+    {"initializeGuess", (PyCFunction)QuickdescentContext_initializeGuess, METH_NOARGS,
+        "Initializes the solution, based on a heuristic."},
+    {"blend", (PyCFunction)QuickdescentContext_blend, METH_NOARGS,
+        "Perform gradient descent on the solution."},
+    {NULL}
+};
+
+
+static PyTypeObject QuickdescentContext_type {
+    PyObject_HEAD_INIT(NULL)
+    0,                                       /* ob_size */
+    "_quickdescent.QuickdescentContext",     /* tp_name */
+    sizeof(struct QuickdescentContext),      /* tp_basicsize */
+    0,                                       /* tp_itemsize */
+    (destructor)QuickdescentContext_dealloc, /* tp_dealloc */
+    0,                                       /* tp_print */
+    0,                                       /* tp_getattr */
+    0,                                       /* tp_setattr */
+    0,                                       /* tp_compare */
+    0,                                       /* tp_repr */
+    0,                                       /* tp_as_number */
+    0,                                       /* tp_as_sequence */
+    0,                                       /* tp_as_mapping */
+    0,                                       /* tp_hash  */
+    0,                                       /* tp_call */
+    0,                                       /* tp_str */
+    0,                                       /* tp_getattro */
+    0,                                       /* tp_setattro */
+    0,                                       /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,  /* tp_flags */
+    "A Quickdescent instance",               /* tp_doc */
+    0,                                       /* tp_traverse */
+    0,                                       /* tp_clear */
+    0,                                       /* tp_richcompare */
+    0,                                       /* tp_weaklistoffset */
+    0,                                       /* tp_iter */
+    0,                                       /* tp_iternext */
+    QuickdescentContext_methods,             /* tp_methods */
+    0,                                       /* tp_members */
+    0,                                       /* tp_getset */
+    0,                                       /* tp_base */
+    0,                                       /* tp_dict */
+    0,                                       /* tp_descr_get */
+    0,                                       /* tp_descr_set */
+    0,                                       /* tp_dictoffset */
+    (initproc)QuickdescentContext_init,      /* tp_init */
+    0,                                       /* tp_alloc */
+    QuickdescentContext_new,                 /* tp_new */
 };
 
 
@@ -297,10 +413,10 @@ Quickdescent::descend(float learning_rate) {
     #define getTarget(y, x) (ptr_tinyt[(y) * row_size + (x)])
     #define getSolution(y, x) (ptr_solution[(y) * row_size + (x)])
     #define getScratch(y, x) (ptr_scratch[(y) * row_size + (x)])
-    #define isBorderAssumingNotMask(y, x) ((y > 0 && getMask(y - 1, x)) || \
-                                           (y < y_max && getMask(y - 1, x)) || \
-                                           (x > 0 && getMask(y, x - 1)) || \
-                                           (x < x_max && getMask(y, x + 1)))
+    #define isBorderAssumingNotMask(y, x) (((y) > 0 && getMask((y) - 1, (x))) || \
+                                           ((y) < y_max && getMask((y) + 1, (x))) || \
+                                           ((x) > 0 && getMask((y), (x) - 1)) || \
+                                           ((x) < x_max && getMask((y), (x) + 1)))
 
     #pragma omp parallel for reduction(+:total_error)
     for (y = 0; y < shape[0]; y++) {
@@ -398,6 +514,17 @@ static PyMethodDef functions[] = {
 
 PyMODINIT_FUNC
 init_quickdescent(void) {
-    Py_InitModule("_quickdescent", functions);
+    PyObject *module;
+    QuickdescentContext_type.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&QuickdescentContext_type) < 0) {
+        return;
+    }
+
+    module = Py_InitModule3("_quickdescent", functions,
+                            "Native extensions for the quickdescent algorithm");
+    Py_INCREF(&QuickdescentContext_type);
+    PyModule_AddObject(module, "QuickdescentContext", (PyObject *)&QuickdescentContext_type);
+
+    /* Sets up the Numpy API */
     import_array();
 }

@@ -22,15 +22,25 @@ class QuickdescentFusion(ReferenceFusion):
         """
         ReferenceFusion.__init__(self)
 
-    def poisson_blend(self, source, mask, tinyt, max_iterations=1000):
+    def update_blend(self, mask_ndarray):
+        assert mask_ndarray.dtype == np.bool
+        assert mask_ndarray.shape == self.canvas.shape[:2]
+        self.active = True
+        assert self.active_mask is None or id(self.active_mask) == id(mask_ndarray), \
+            "The quickdescent algorithm requires that you don't change the mask address."
+        self.active_mask = mask_ndarray
+
+    def poisson_blend(self, source, mask, tinyt, max_iterations=100):
         assert source.shape == mask.shape == tinyt.shape
         assert len(source.shape) == 2
         solution = np.zeros(tinyt.shape, dtype=np.float32)
         scratch = np.zeros(tinyt.shape, dtype=np.float32)
         errorlog = np.zeros(max_iterations, dtype=np.float32)
         with log_timer("%s.native" % self.__class__.__name__):
-            _quickdescent.poisson_blend(source, mask, tinyt, solution, scratch, errorlog, 0.00001,
-                                        max_iterations)
+            q = _quickdescent.QuickdescentContext(source, mask, tinyt, solution, scratch, errorlog,
+                                                  0.00001, max_iterations)
+            q.initializeGuess()
+            q.blend()
         LOG.debug("Quickdescent iterations: %d" % (errorlog.nonzero()[0][-1] + 1))
         LOG.debug("Final error value: %f" % (errorlog[errorlog.nonzero()[0][-1]]))
         return solution.clip(0, 1)

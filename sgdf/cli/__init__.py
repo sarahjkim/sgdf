@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 import re
 from sgdf.benchmarking.suites import benchmark_default
 from sgdf.benchmarking.headless import fusion_from_file
@@ -14,6 +15,8 @@ def main():
                         help="Program mode")
     parser.add_argument("--debug", action="store_true", default=False,
                         help="Turns on debug logging (extra verbose)")
+    parser.add_argument("--wait", action="store_true", default=False,
+                        help="Wait for keyboard input (useful for debugging)")
     parser.add_argument("-a", "--algorithm", default="reference",
                         help="Fusion algorithm to use")
     parser.add_argument("-s", "--source", help="Source image path")
@@ -28,6 +31,12 @@ def main():
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
+
+    if args.wait:
+        raw_input(("Wait mode (--wait) enabled.\n"
+                   "This feature lets you easily attach a debugger or profiler before starting.\n"
+                   "PID: %d\n\n"
+                   "Press any key to continue...") % os.getpid())
 
     if args.command == "gui":
         editor_view = EditorView(args.algorithm)
