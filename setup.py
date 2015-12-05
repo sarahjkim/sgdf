@@ -3,6 +3,8 @@
 import glob
 import numpy as np
 import os
+import platform
+from os.path import abspath
 from setuptools import setup, Extension
 
 
@@ -31,7 +33,7 @@ def find_tbb():
                           "    Please build the included version of TBB first.\n"
                           "    Go into vendor/tbb44_20151115oss/ and run 'make'.")
     assert len(library_path) == 1, "Multiple versions of TBB built? Ambiguous library path"
-    return include_path[0], library_path[0]
+    return map(abspath, (include_path[0], library_path[0]))
 
 
 if __name__ == "__main__":
@@ -46,13 +48,16 @@ if __name__ == "__main__":
                 extension_name = ".".join(fullsplit(dirpath))
                 print "Extension:", extension_name
                 tbb_include_dir, tbb_library_path = find_tbb()
+                extension_kwargs = dict(include_dirs=[np.get_include(), tbb_include_dir],
+                                        library_dirs=[tbb_library_path],
+                                        libraries=["tbb"],
+                                        extra_compile_args=["-std=c++11", "-g", "-O2"])
+                if platform.system() == "Darwin":
+                    tbb_link_arg = "-Wl,-rpath,%s" % tbb_library_path
+                    extension_kwargs.setdefault("extra_link_args", []).append(tbb_link_arg)
                 extension = Extension(extension_name,
                                       map(lambda name: os.path.join(dirpath, name), c_sources),
-                                      include_dirs=[np.get_include(), tbb_include_dir],
-                                      library_dirs=[tbb_library_path],
-                                      libraries=["tbb"],
-                                      extra_compile_args=["-std=c++11", "-g", "-O2", "-pthread"],
-                                      extra_link_args=["-pthread"])
+                                      **extension_kwargs)
                 extensions.append(extension)
         elif "__init__.py" in filenames:
             packages.append(".".join(fullsplit(dirpath)))
