@@ -51,7 +51,7 @@ if __name__ == "__main__":
                 extension_kwargs = dict(include_dirs=[np.get_include(), tbb_include_dir],
                                         library_dirs=[tbb_library_path],
                                         libraries=["tbb"],
-                                        extra_compile_args=["-std=c++11", "-g", "-O2"])
+                                        extra_compile_args=["-std=c++11", "-g", "-O3"])
                 if platform.system() == "Darwin":
                     tbb_link_arg = "-Wl,-rpath,%s" % tbb_library_path
                     extension_kwargs.setdefault("extra_link_args", []).append(tbb_link_arg)

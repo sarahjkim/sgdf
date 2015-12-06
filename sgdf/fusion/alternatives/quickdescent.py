@@ -30,7 +30,7 @@ class QuickdescentFusion(ReferenceFusion):
         self.cache_source_bounds = None
         self.cache_target_bounds = None
 
-        self.epsilon = 0.00001
+        self.epsilon = 0.00005
         self.max_iterations = 200
 
     def update_blend(self, mask_ndarray):
@@ -86,12 +86,11 @@ class QuickdescentFusion(ReferenceFusion):
 
                     for channel in range(3):
                         solution = np.zeros(tinyt.shape[:2], dtype=np.float32, order="C")
-                        scratch = np.zeros(tinyt.shape[:2], dtype=np.float32, order="C")
                         errorlog = np.zeros(self.max_iterations, dtype=np.float32, order="C")
                         q = _quickdescent.QuickdescentContext(np.copy(source[:, :, channel], order="C"),
                                                               self.cache_mask,
                                                               np.copy(tinyt[:, :, channel], order="C"),
-                                                              solution, scratch, errorlog)
+                                                              solution, errorlog)
                         q.initializeGuess()
                         self.cache_native.append(q)
                         self.cache_errorlog.append(errorlog)

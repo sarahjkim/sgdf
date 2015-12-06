@@ -11,9 +11,10 @@
 
 
 class Quickdescent {
-        PyArrayObject *arr_source, *arr_mask, *arr_tinyt, *arr_solution, *arr_scratch,
-                      *arr_errorlog;
+        PyArrayObject *arr_source, *arr_mask, *arr_tinyt, *arr_solution, *arr_errorlog;
         size_t shape[2];
+        float *dfdp_scratch;
+        uint8_t *pixel_map;
 
     public:
         Quickdescent() {};
@@ -22,21 +23,24 @@ class Quickdescent {
             Py_XDECREF(arr_mask);
             Py_XDECREF(arr_tinyt);
             Py_XDECREF(arr_solution);
-            Py_XDECREF(arr_scratch);
             Py_XDECREF(arr_errorlog);
+            if (dfdp_scratch != NULL)
+                PyMem_Free(dfdp_scratch);
+            if (pixel_map != NULL)
+                PyMem_Free(pixel_map);
         };
         int parseArgs(PyObject *args);
-        PyObject *initializeGuess();
+        PyObject *initializeGuess(void);
         PyObject *blend(PyObject *args);
     private:
         float averageBorderValue(PyArrayObject *im);
-        float descend(float learning_rate, float epsilon, int max_iterations);
+        float descend(float learning_rate, int max_iterations);
         inline bool isBorder(npy_intp y, npy_intp x);
+        void recomputePixelMap(void);
         inline float getSource(const npy_intp y, const npy_intp x);
         inline bool getMask(const npy_intp y, const npy_intp x);
         inline float getTarget(const npy_intp y, const npy_intp x);
         inline float &getSolution(const npy_intp y, const npy_intp x);
-        inline float &getScratch(const npy_intp y, const npy_intp x);
         inline float &getErrorlog(const npy_intp n);
 };
 
@@ -193,6 +197,24 @@ Quickdescent::isBorder(npy_intp y, npy_intp x) {
 }
 
 
+void
+Quickdescent::recomputePixelMap(void) {
+    const size_t row_size = shape[1];
+    for (npy_intp y = 0; y < shape[0]; y++) {
+        for (npy_intp x = 0; x < shape[1]; x++) {
+            uint8_t pixel_type;
+            if (getMask(y, x))
+                pixel_type = 0;
+            else if (isBorder(y, x))
+                pixel_type = 1;
+            else
+                pixel_type = 2;
+            pixel_map[y * row_size + x] = pixel_type;
+        }
+    }
+}
+
+
 /* Returns a pixel in arr_source. */
 inline float
 Quickdescent::getSource(const npy_intp y, const npy_intp x) {
@@ -221,13 +243,6 @@ Quickdescent::getSolution(const npy_intp y, const npy_intp x) {
 }
 
 
-/* Returns a reference to a pixel in arr_scratch. */
-inline float &
-Quickdescent::getScratch(const npy_intp y, const npy_intp x) {
-    return *(float *)PyArray_GETPTR2(arr_scratch, y, x);
-}
-
-
 /* Returns a reference to a pixel in arr_errorlog. */
 inline float &
 Quickdescent::getErrorlog(const npy_intp n) {
@@ -243,10 +258,9 @@ Quickdescent::getErrorlog(const npy_intp n) {
  */
 int
 Quickdescent::parseArgs(PyObject *args) {
-    PyObject *arg_source, *arg_mask, *arg_tinyt, *arg_solution, *arg_errorlog, *arg_scratch;
-    if (!PyArg_ParseTuple(args, "OOOO!O!O!", &arg_source, &arg_mask, &arg_tinyt,
-                          &PyArray_Type, &arg_solution, &PyArray_Type, &arg_scratch,
-                          &PyArray_Type, &arg_errorlog)) {
+    PyObject *arg_source, *arg_mask, *arg_tinyt, *arg_solution, *arg_errorlog;
+    if (!PyArg_ParseTuple(args, "OOOO!O!", &arg_source, &arg_mask, &arg_tinyt,
+                          &PyArray_Type, &arg_solution, &PyArray_Type, &arg_errorlog)) {
         return 1;
     }
 
@@ -254,14 +268,12 @@ Quickdescent::parseArgs(PyObject *args) {
     arr_mask = (PyArrayObject *) PyArray_FROM_OTF(arg_mask, NPY_BOOL, NPY_ARRAY_IN_ARRAY);
     arr_tinyt = (PyArrayObject *) PyArray_FROM_OTF(arg_tinyt, NPY_FLOAT, NPY_ARRAY_IN_ARRAY);
     arr_solution = (PyArrayObject *) PyArray_FROM_OTF(arg_solution, NPY_FLOAT, NPY_ARRAY_INOUT_ARRAY);
-    arr_scratch = (PyArrayObject *) PyArray_FROM_OTF(arg_scratch, NPY_FLOAT, NPY_ARRAY_INOUT_ARRAY);
 
     // Extra error checking for Numpy input arrays
-    std::array<PyArrayObject *, 5> ndarray_args = {{arr_source,
+    std::array<PyArrayObject *, 4> ndarray_args = {{arr_source,
                                                     arr_mask,
                                                     arr_tinyt,
-                                                    arr_solution,
-                                                    arr_scratch}};
+                                                    arr_solution}};
     for (int i = 0; i < ndarray_args.size(); i++) {
         PyArrayObject *ndarray_arg = ndarray_args[i];
         if (ndarray_arg == NULL) {
@@ -283,6 +295,9 @@ Quickdescent::parseArgs(PyObject *args) {
             }
         }
     }
+
+    pixel_map = (uint8_t *) PyMem_Malloc(sizeof(uint8_t) * shape[0] * shape[1]);
+    dfdp_scratch = (float *) PyMem_Malloc(sizeof(float) * shape[0] * shape[1]);
 
     arr_errorlog = (PyArrayObject *) PyArray_FROM_OTF(arg_errorlog, NPY_FLOAT, NPY_ARRAY_INOUT_ARRAY);
     if (arr_errorlog == NULL) {
@@ -309,7 +324,7 @@ Quickdescent::parseArgs(PyObject *args) {
  * @side-effect  Sets the values of arr_solution
  */
 PyObject *
-Quickdescent::initializeGuess() {
+Quickdescent::initializeGuess(void) {
     float average_target = averageBorderValue(arr_tinyt);
     float average_source = averageBorderValue(arr_source);
     float average_delta = average_target - average_source;
@@ -377,11 +392,13 @@ Quickdescent::blend(PyObject *args) {
     }
 
     Py_BEGIN_ALLOW_THREADS
+    recomputePixelMap();
+
     float error, previous_error, delta_error;
     float learning_rate;
     for (int iteration = 0; iteration < max_iterations; iteration++) {
         learning_rate = 100.0 * max_iterations / (max_iterations + 500.0 * iteration);
-        error = descend(learning_rate, epsilon, max_iterations);
+        error = descend(learning_rate, max_iterations);
         getErrorlog(iteration) = error;
         if (iteration > 0) {
             delta_error = error - previous_error;
@@ -406,36 +423,27 @@ Quickdescent::blend(PyObject *args) {
  * @side-effect  Sets arr_solution to new PyArrayObject with revised values
  */
 float
-Quickdescent::descend(float learning_rate, float epsilon, int max_iterations) {
+Quickdescent::descend(float learning_rate, int max_iterations) {
     npy_intp y, x;
     double total_error = 0, total_dfdp = 0;
-    const size_t y_max = shape[0] - 1;
-    const size_t x_max = shape[1] - 1;
     const size_t row_size = shape[1];
     const float *ptr_source = (float *)PyArray_DATA(arr_source);
-    const bool *ptr_mask = (bool *)PyArray_DATA(arr_mask);
     const float *ptr_tinyt = (float *)PyArray_DATA(arr_tinyt);
     float *ptr_solution = (float *)PyArray_DATA(arr_solution);
-    float *ptr_scratch = (float *)PyArray_DATA(arr_scratch);
 
     /* Here are optimized versions of our accessor methods that we use in this tight loop.
      * The PyArray_FROM_OTF will guarantee that our arrays are C-style contiguous, so we can
      *     address them directly as arrays.
      * This optimization provides roughly 2x to 3x improvement in performance.  */
     #define getSource(y, x) (ptr_source[(y) * row_size + (x)])
-    #define getMask(y, x) (ptr_mask[(y) * row_size + (x)])
     #define getTarget(y, x) (ptr_tinyt[(y) * row_size + (x)])
     #define getSolution(y, x) (ptr_solution[(y) * row_size + (x)])
-    #define getScratch(y, x) (ptr_scratch[(y) * row_size + (x)])
-    #define isBorderAssumingNotMask(y, x) (((y) > 0 && getMask((y) - 1, (x))) || \
-                                           ((y) < y_max && getMask((y) + 1, (x))) || \
-                                           ((x) > 0 && getMask((y), (x) - 1)) || \
-                                           ((x) < x_max && getMask((y), (x) + 1)))
+    #define getScratch(y, x) (dfdp_scratch[(y) * row_size + (x)])
 
-    #pragma omp parallel for reduction(+:total_error)
     for (y = 0; y < shape[0]; y++) {
         for (x = 0; x < shape[1]; x++) {
             double dfdp = 0;
+            uint8_t pixel_type = pixel_map[y * row_size + x];
 
             #define append_error(e) do { \
                 double e_ = (e); \
@@ -443,22 +451,24 @@ Quickdescent::descend(float learning_rate, float epsilon, int max_iterations) {
                 total_error += e_ * e_; \
             } while (0)
 
-            if (getMask(y, x)) {
+            if (pixel_type == 0) {
+                /* getMask(y, x) */
                 float solution_p = getSolution(y, x);
                 float source_p = getSource(y, x);
                 if (y > 0) {
                     append_error((solution_p - getSolution(y - 1, x)) - (source_p - getSource(y - 1, x)));
                 }
-                if (x > 0) {
-                    append_error((solution_p - getSolution(y, x - 1)) - (source_p - getSource(y, x - 1)));
-                }
                 if (y < shape[0] - 1) {
                     append_error((solution_p - getSolution(y + 1, x)) - (source_p - getSource(y + 1, x)));
+                }
+                if (x > 0) {
+                    append_error((solution_p - getSolution(y, x - 1)) - (source_p - getSource(y, x - 1)));
                 }
                 if (x < shape[1] - 1) {
                     append_error((solution_p - getSolution(y, x + 1)) - (source_p - getSource(y, x + 1)));
                 }
-            } else if (isBorderAssumingNotMask(y, x)) {
+            } else if (pixel_type == 1) {
+                /* isBorder(y, x) */
                 dfdp = 4 * (getSolution(y, x) - getTarget(y, x));
             }
 
@@ -470,21 +480,22 @@ Quickdescent::descend(float learning_rate, float epsilon, int max_iterations) {
     }
 
     if (total_dfdp > 0) {
+        const float multiplier = learning_rate / total_dfdp;
         for (y = 0; y < shape[0]; y++) {
             for (x = 0; x < shape[1]; x++) {
-                if (getMask(y, x) || isBorderAssumingNotMask(y, x)) {
-                    getSolution(y, x) -= getScratch(y, x) * learning_rate / total_dfdp;
+                uint8_t pixel_type = pixel_map[y * row_size + x];
+                if (pixel_type != 2) {
+                    /* getMask(y, x) || isBorder(y, x) */
+                    getSolution(y, x) -= getScratch(y, x) * multiplier;
                 }
             }
         }
     }
 
     #undef getSource
-    #undef getMask
     #undef getTarget
     #undef getSolution
     #undef getScratch
-    #undef isBorderAssumingNotMask
 
     return total_error;
 }
