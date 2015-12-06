@@ -65,7 +65,7 @@ class QuickdescentFusion(ReferenceFusion):
             t_top, t_bottom, t_left, t_right = self.target_bounds
 
             if (self.source_bounds != self.cache_source_bounds or
-                self.target_bounds != self.cache_target_bounds):
+                    self.target_bounds != self.cache_target_bounds):
                 with log_timer("%s.setup" % self.__class__.__name__):
                     # We copy cache_mask here, because the native code would need to copy it anyway
                     # (since it is a view, not an actual ndarray).  However, we don't copy source or
@@ -73,7 +73,8 @@ class QuickdescentFusion(ReferenceFusion):
                     # below.
                     source = self.active_source[s_top:s_bottom, s_left:s_right]
                     tinyt = self.canvas[t_top:t_bottom, t_left:t_right, :]
-                    self.cache_mask = np.copy(self.active_mask[t_top:t_bottom, t_left:t_right], order="C")
+                    self.cache_mask = np.copy(self.active_mask[t_top:t_bottom, t_left:t_right],
+                                              order="C")
 
                     # Used for storing our QuickdescentContext instances
                     self.cache_native = []
@@ -87,9 +88,9 @@ class QuickdescentFusion(ReferenceFusion):
                     for channel in range(3):
                         solution = np.zeros(tinyt.shape[:2], dtype=np.float32, order="C")
                         errorlog = np.zeros(self.max_iterations, dtype=np.float32, order="C")
-                        q = _quickdescent.QuickdescentContext(np.copy(source[:, :, channel], order="C"),
+                        q = _quickdescent.QuickdescentContext(source[:, :, channel].copy(order="C"),
                                                               self.cache_mask,
-                                                              np.copy(tinyt[:, :, channel], order="C"),
+                                                              tinyt[:, :, channel].copy(order="C"),
                                                               solution, errorlog)
                         q.initializeGuess()
                         self.cache_native.append(q)
@@ -110,7 +111,11 @@ class QuickdescentFusion(ReferenceFusion):
             for channel in range(3):
                 thread = threading.Thread(target=blend_channel, args=(channel,))
                 threads.append(thread)
-            [thread.start() for thread in threads]
-            [thread.join() for thread in threads]
+
+            for thread in threads:
+                thread.start()
+
+            for thread in threads:
+                thread.join()
 
             return self.cache_target.clip(0, 1)
