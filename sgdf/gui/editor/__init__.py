@@ -48,8 +48,8 @@ class EditorView(object):
                                ("Not Feathered",
                                 lambda: self.set_brush_feathered(False), (SUPER, "4")),
                                (),
-                               ("Increase brush size", self.increase_brush_size, (CONTROL, "]")),
-                               ("Decrease brush size", self.decrease_brush_size, (CONTROL, "["))]
+                               ("Increase brush size", self.increase_brush_size, (CONTROL, "bracketright")),
+                               ("Decrease brush size", self.decrease_brush_size, (CONTROL, "bracketleft"))]
         menu_items["Help"] = []
         self.menu = MenuBuilder(items=menu_items)
         self.menu.render(self.root)
