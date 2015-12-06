@@ -139,7 +139,7 @@ class ReferenceFusion(BaseFusion):
             # Border pixels need to have a v[N] = t[N] constraint.
             # We take the set difference, in order to prevent messing with pixels that are both
             #     border and spurious.
-            spurious_rows = np.setdiff1d(A.sum(axis=1).nonzero()[0], border_indexes)
+            spurious_rows = np.setdiff1d(np.array(A.sum(axis=1)).flatten().nonzero()[0], border_indexes)
             spurious_cells_r, spurious_cells_c = (A[spurious_rows, :] > 0).nonzero()
             A[spurious_rows[spurious_cells_r], spurious_cells_c] = 0
 
