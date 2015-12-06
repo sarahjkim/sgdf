@@ -45,6 +45,17 @@ class QuickdescentFusion(ReferenceFusion):
             t_top, t_bottom, t_left, t_right = self.target_bounds
             self.cache_mask[:, :] = self.active_mask[t_top:t_bottom, t_left:t_right]
 
+    def commit_blend(self):
+        if self.active:
+            self.canvas = self.get_fusion()
+            self.active = False
+            self.cache_mask = None
+            self.cache_native = None
+            self.cache_errorlog = None
+            self.cache_target = None
+            self.cache_source_bounds = None
+            self.cache_target_bounds = None
+
     def get_fusion(self):
         with log_timer("%s.get_fusion" % self.__class__.__name__):
             if not self.active:
