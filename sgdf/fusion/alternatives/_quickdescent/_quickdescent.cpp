@@ -376,6 +376,7 @@ Quickdescent::blend(PyObject *args) {
         return NULL;
     }
 
+    Py_BEGIN_ALLOW_THREADS
     float error, previous_error, delta_error;
     float learning_rate;
     for (int iteration = 0; iteration < max_iterations; iteration++) {
@@ -389,6 +390,8 @@ Quickdescent::blend(PyObject *args) {
         }
         previous_error = error;
     }
+    Py_END_ALLOW_THREADS
+
     Py_INCREF(arr_solution);
     return (PyObject *)arr_solution;
 }
