@@ -11,12 +11,10 @@
 
 
 class Quickdescent {
-        PyArrayObject *arr_source, *arr_mask, *arr_tinyt, *arr_solution, *arr_scratch;
+        PyArrayObject *arr_source, *arr_mask, *arr_tinyt, *arr_solution, *arr_scratch,
+                      *arr_errorlog;
         size_t shape[2];
 
-        float epsilon;
-        int max_iterations;
-        PyArrayObject *arr_errorlog;
     public:
         Quickdescent() {};
         ~Quickdescent() {
@@ -28,11 +26,11 @@ class Quickdescent {
             Py_XDECREF(arr_errorlog);
         };
         int parseArgs(PyObject *args);
-        int initializeGuess();
-        int blend();
+        PyObject *initializeGuess();
+        PyObject *blend(PyObject *args);
     private:
         float averageBorderValue(PyArrayObject *im);
-        float descend(float learning_rate);
+        float descend(float learning_rate, float epsilon, int max_iterations);
         inline bool isBorder(npy_intp y, npy_intp x);
         inline float getSource(const npy_intp y, const npy_intp x);
         inline bool getMask(const npy_intp y, const npy_intp x);
@@ -43,7 +41,7 @@ class Quickdescent {
 };
 
 
-typedef struct QuickdescentContext {
+typedef struct {
     PyObject_HEAD
     Quickdescent *quickdescent;
 } QuickdescentContext_object;
@@ -68,6 +66,7 @@ QuickdescentContext_new(PyTypeObject *type, PyObject *args, PyObject *kwargs) {
             Py_DECREF(self);
             return NULL;
         }
+        memset(self->quickdescent, 0, sizeof(Quickdescent));
         new (self->quickdescent) Quickdescent();
     }
     return (PyObject *)self;
@@ -81,6 +80,7 @@ QuickdescentContext_init(QuickdescentContext_object *self, PyObject *args, PyObj
         if (self->quickdescent == NULL) {
             return -1;
         }
+        memset(self->quickdescent, 0, sizeof(Quickdescent));
         new (self->quickdescent) Quickdescent();
     }
 
@@ -97,26 +97,20 @@ QuickdescentContext_init(QuickdescentContext_object *self, PyObject *args, PyObj
 
 static PyObject *
 QuickdescentContext_initializeGuess(QuickdescentContext_object *self) {
-    if (self->quickdescent->initializeGuess()) {
-        return NULL;
-    }
-    Py_RETURN_NONE;
+    return self->quickdescent->initializeGuess();
 }
 
 
 static PyObject *
-QuickdescentContext_blend(QuickdescentContext_object *self) {
-    if (self->quickdescent->blend()) {
-        return NULL;
-    }
-    Py_RETURN_NONE;
+QuickdescentContext_blend(QuickdescentContext_object *self, PyObject *args) {
+    return self->quickdescent->blend(args);
 }
 
 
 static PyMethodDef QuickdescentContext_methods[] = {
     {"initializeGuess", (PyCFunction)QuickdescentContext_initializeGuess, METH_NOARGS,
         "Initializes the solution, based on a heuristic."},
-    {"blend", (PyCFunction)QuickdescentContext_blend, METH_NOARGS,
+    {"blend", (PyCFunction)QuickdescentContext_blend, METH_VARARGS,
         "Perform gradient descent on the solution."},
     {NULL}
 };
@@ -126,7 +120,7 @@ static PyTypeObject QuickdescentContext_type {
     PyObject_HEAD_INIT(NULL)
     0,                                       /* ob_size */
     "_quickdescent.QuickdescentContext",     /* tp_name */
-    sizeof(struct QuickdescentContext),      /* tp_basicsize */
+    sizeof(QuickdescentContext_object),      /* tp_basicsize */
     0,                                       /* tp_itemsize */
     (destructor)QuickdescentContext_dealloc, /* tp_dealloc */
     0,                                       /* tp_print */
@@ -250,9 +244,9 @@ Quickdescent::getErrorlog(const npy_intp n) {
 int
 Quickdescent::parseArgs(PyObject *args) {
     PyObject *arg_source, *arg_mask, *arg_tinyt, *arg_solution, *arg_errorlog, *arg_scratch;
-    if (!PyArg_ParseTuple(args, "OOOO!O!O!fi", &arg_source, &arg_mask, &arg_tinyt,
+    if (!PyArg_ParseTuple(args, "OOOO!O!O!", &arg_source, &arg_mask, &arg_tinyt,
                           &PyArray_Type, &arg_solution, &PyArray_Type, &arg_scratch,
-                          &PyArray_Type, &arg_errorlog, &epsilon, &max_iterations)) {
+                          &PyArray_Type, &arg_errorlog)) {
         return 1;
     }
 
@@ -290,23 +284,13 @@ Quickdescent::parseArgs(PyObject *args) {
         }
     }
 
-    {
-        arr_errorlog = (PyArrayObject *) PyArray_FROM_OTF(arg_errorlog, NPY_FLOAT, NPY_ARRAY_INOUT_ARRAY);
-        if (arr_errorlog == NULL) {
-            return 1;
-        }
-        if (PyArray_NDIM(arr_errorlog) != 1) {
-            PyErr_SetString(PyExc_ValueError, "Error log should be a 1 dimensional array.");
-            return 1;
-        }
-
-        npy_intp *dims = PyArray_DIMS(arr_errorlog);
-        if (max_iterations == 0) {
-            max_iterations = dims[0];
-        } else if (max_iterations != dims[0]) {
-            PyErr_SetString(PyExc_ValueError, "Error log should be the same size as max_iterations.");
-            return 1;
-        }
+    arr_errorlog = (PyArrayObject *) PyArray_FROM_OTF(arg_errorlog, NPY_FLOAT, NPY_ARRAY_INOUT_ARRAY);
+    if (arr_errorlog == NULL) {
+        return 1;
+    }
+    if (PyArray_NDIM(arr_errorlog) != 1) {
+        PyErr_SetString(PyExc_ValueError, "Error log should be a 1 dimensional array.");
+        return 1;
     }
 
     return 0;
@@ -324,7 +308,7 @@ Quickdescent::parseArgs(PyObject *args) {
  * @return       Designates a successful initialization
  * @side-effect  Sets the values of arr_solution
  */
-int
+PyObject *
 Quickdescent::initializeGuess() {
     float average_target = averageBorderValue(arr_tinyt);
     float average_source = averageBorderValue(arr_source);
@@ -344,7 +328,8 @@ Quickdescent::initializeGuess() {
             }
         }
     }
-    return 0;
+    Py_INCREF(arr_solution);
+    return (PyObject *)arr_solution;
 }
 
 
@@ -374,13 +359,28 @@ Quickdescent::averageBorderValue(PyArrayObject *im) {
 }
 
 
-int
-Quickdescent::blend() {
+PyObject *
+Quickdescent::blend(PyObject *args) {
+    float epsilon;
+    int max_iterations;
+    if (!PyArg_ParseTuple(args, "fi", &epsilon, &max_iterations)) {
+        return NULL;
+    }
+
+    int errorlog_size = PyArray_DIMS(arr_errorlog)[0];
+    if (max_iterations == 0) {
+        max_iterations = errorlog_size;
+    } else if (max_iterations > errorlog_size) {
+        PyErr_Format(PyExc_ValueError, "max_iterations is %d, but errorlog only has space for %u",
+                     max_iterations, errorlog_size);
+        return NULL;
+    }
+
     float error, previous_error, delta_error;
     float learning_rate;
     for (int iteration = 0; iteration < max_iterations; iteration++) {
         learning_rate = 100.0 * max_iterations / (max_iterations + 500.0 * iteration);
-        error = descend(learning_rate);
+        error = descend(learning_rate, epsilon, max_iterations);
         getErrorlog(iteration) = error;
         if (iteration > 0) {
             delta_error = error - previous_error;
@@ -389,7 +389,8 @@ Quickdescent::blend() {
         }
         previous_error = error;
     }
-    return 0;
+    Py_INCREF(arr_solution);
+    return (PyObject *)arr_solution;
 }
 
 
@@ -402,7 +403,7 @@ Quickdescent::blend() {
  * @side-effect  Sets arr_solution to new PyArrayObject with revised values
  */
 float
-Quickdescent::descend(float learning_rate) {
+Quickdescent::descend(float learning_rate, float epsilon, int max_iterations) {
     npy_intp y, x;
     double total_error = 0, total_dfdp = 0;
     const size_t y_max = shape[0] - 1;

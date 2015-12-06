@@ -71,8 +71,8 @@ class ReferenceFusion(BaseFusion):
             s_top, s_bottom, s_left, s_right = self.source_bounds
             t_top, t_bottom, t_left, t_right = self.target_bounds
             source = self.active_source[s_top:s_bottom, s_left:s_right]
-            s_mask = self.active_mask[t_top:t_bottom, t_left:t_right]
             tinyt = target[t_top:t_bottom, t_left:t_right, :]
+            s_mask = self.active_mask[t_top:t_bottom, t_left:t_right]
 
             for channel in range(3):
                 solution = self.poisson_blend(source[:, :, channel], s_mask, tinyt[:, :, channel])
