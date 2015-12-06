@@ -30,7 +30,7 @@ class QuickdescentFusion(ReferenceFusion):
         self.cache_target_bounds = None
 
         self.epsilon = 0.00001
-        self.max_iterations = 1000
+        self.max_iterations = 200
 
     def update_blend(self, mask_ndarray):
         assert mask_ndarray.dtype == np.bool
@@ -84,10 +84,10 @@ class QuickdescentFusion(ReferenceFusion):
 
         for channel in range(3):
             with log_timer("%s.native" % self.__class__.__name__):
-                # self.cache_native[channel].initializeGuess()
                 solution = self.cache_native[channel].blend(self.epsilon, self.max_iterations)
             self.cache_target[t_top:t_bottom, t_left:t_right, channel] = solution
             errorlog = self.cache_errorlog[channel]
             LOG.debug("Quickdescent iterations: %d" % (errorlog.nonzero()[0][-1] + 1))
             LOG.debug("Final error value: %f" % (errorlog[errorlog.nonzero()[0][-1]]))
-        return self.cache_target
+
+        return self.cache_target.clip(0, 1)

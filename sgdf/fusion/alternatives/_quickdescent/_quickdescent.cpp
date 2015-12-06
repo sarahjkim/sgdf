@@ -457,21 +457,6 @@ Quickdescent::descend(float learning_rate, float epsilon, int max_iterations) {
                 }
             } else if (isBorderAssumingNotMask(y, x)) {
                 dfdp = 4 * (getSolution(y, x) - getTarget(y, x));
-            } else {
-                float solution_p = getSolution(y, x);
-                float target_p = getTarget(y, x);
-                if (y > 0) {
-                    append_error((solution_p - getSolution(y - 1, x)) - (target_p - getTarget(y - 1, x)));
-                }
-                if (x > 0) {
-                    append_error((solution_p - getSolution(y, x - 1)) - (target_p - getTarget(y, x - 1)));
-                }
-                if (y < shape[0] - 1) {
-                    append_error((solution_p - getSolution(y + 1, x)) - (target_p - getTarget(y + 1, x)));
-                }
-                if (x < shape[1] - 1) {
-                    append_error((solution_p - getSolution(y, x + 1)) - (target_p - getTarget(y, x + 1)));
-                }
             }
 
             #undef append_error
@@ -484,7 +469,9 @@ Quickdescent::descend(float learning_rate, float epsilon, int max_iterations) {
     if (total_dfdp > 0) {
         for (y = 0; y < shape[0]; y++) {
             for (x = 0; x < shape[1]; x++) {
-                getSolution(y, x) -= getScratch(y, x) * learning_rate / total_dfdp;
+                if (getMask(y, x) || isBorderAssumingNotMask(y, x)) {
+                    getSolution(y, x) -= getScratch(y, x) * learning_rate / total_dfdp;
+                }
             }
         }
     }
