@@ -34,6 +34,9 @@ class QuickdescentFusion(ReferenceFusion):
         self.max_iterations = max_iterations
         self.threading = threading
 
+    def get_errorlog(self):
+        return self.cache_errorlog
+
     def update_blend(self, mask_ndarray):
         assert mask_ndarray.dtype == np.bool
         assert mask_ndarray.shape == self.canvas.shape[:2]

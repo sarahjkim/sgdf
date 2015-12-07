@@ -5,11 +5,12 @@ import re
 from sgdf.benchmarking.suites import benchmark_default
 from sgdf.benchmarking.headless import fusion_from_file
 from sgdf.cli.extra import parse_extra
+from sgdf.graphing.charts import fusion_with_charts
 from sgdf.gui.editor import EditorView
 
 
 def main():
-    command_modes = ["gui", "benchmark", "headless"]
+    command_modes = ["gui", "benchmark", "headless", "graph"]
 
     parser = argparse.ArgumentParser()
     parser.add_argument("command", nargs="?", default="gui", choices=command_modes,
@@ -22,6 +23,8 @@ def main():
                         help="Fusion algorithm to use")
     parser.add_argument("-X", "--extra", action="append", default=[],
                         help="Extra options for algorithm")
+    parser.add_argument("-C", "--chart-extra", action="append", default=[],
+                        help="Extra options for chart generation")
     parser.add_argument("-s", "--source", help="Source image path")
     parser.add_argument("-t", "--target", help="Target image path")
     parser.add_argument("-m", "--mask", help="Mask image path")
@@ -40,6 +43,11 @@ def main():
         for extra_option in args.extra:
             algorithm_kwargs.update(parse_extra(extra_option))
 
+    chart_kwargs = {}
+    if args.chart_extra:
+        for extra_option in args.chart_extra:
+            chart_kwargs.update(parse_extra(extra_option))
+
     if args.wait:
         raw_input(("Wait mode (--wait) enabled.\n"
                    "This feature lets you easily attach a debugger or profiler before starting.\n"
@@ -55,7 +63,7 @@ def main():
         editor_view.mainloop()
     elif args.command == "benchmark":
         benchmark_default(args.algorithm, algorithm_kwargs=algorithm_kwargs)
-    elif args.command == "headless":
+    elif args.command in ("headless", "graph"):
         assert args.algorithm
         assert args.source
         assert args.target
@@ -66,7 +74,14 @@ def main():
             offset = [int(offset_match.group("y")), int(offset_match.group("x"))]
         else:
             offset = None
-        fusion_from_file(args.algorithm, args.source, args.target, args.mask,
-                         offset=offset,
-                         output_path=args.output,
-                         algorithm_kwargs=algorithm_kwargs)
+        if args.command == "headless":
+            fusion_from_file(args.algorithm, args.source, args.target, args.mask,
+                             offset=offset,
+                             output_path=args.output,
+                             algorithm_kwargs=algorithm_kwargs)
+        elif args.command == "graph":
+            fusion_with_charts(args.algorithm, args.source, args.target, args.mask,
+                               offset=offset,
+                               output_path=args.output,
+                               algorithm_kwargs=algorithm_kwargs,
+                               chart_kwargs=chart_kwargs)
