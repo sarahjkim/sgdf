@@ -14,7 +14,12 @@ def parse_extra(text):
 
     """
     if "=" not in text:
-        return {text: True}
+        if text.startswith("no-"):
+            key = text[len("no-"):]
+            value = False
+        else:
+            key = text
+            value = True
     else:
         key_length = text.find("=")
         assert key_length > 0
@@ -24,4 +29,5 @@ def parse_extra(text):
             value = int(value)
         elif re.match(r"^-?(\d|\.)+$", value):
             value = float(value)
-        return {key: value}
+
+    return {key: value}

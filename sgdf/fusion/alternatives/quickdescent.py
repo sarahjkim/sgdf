@@ -15,7 +15,7 @@ LOG = logging.getLogger(__name__)
 
 
 class QuickdescentFusion(ReferenceFusion):
-    def __init__(self, epsilon=0.00005, max_iterations=200):
+    def __init__(self, epsilon=0.00005, max_iterations=200, threading=True):
         """
         An algorithm for the Gradient Domain Fusion problem, using gradient descent implemented
         natively.
@@ -32,6 +32,7 @@ class QuickdescentFusion(ReferenceFusion):
 
         self.epsilon = epsilon
         self.max_iterations = max_iterations
+        self.threading = threading
 
     def update_blend(self, mask_ndarray):
         assert mask_ndarray.dtype == np.bool
@@ -107,15 +108,19 @@ class QuickdescentFusion(ReferenceFusion):
                 LOG.debug("Quickdescent iterations: %d" % (errorlog.nonzero()[0][-1] + 1))
                 LOG.debug("Final error value: %f" % (errorlog[errorlog.nonzero()[0][-1]]))
 
-            threads = []
-            for channel in range(3):
-                thread = threading.Thread(target=blend_channel, args=(channel,))
-                threads.append(thread)
+            if self.threading:
+                threads = []
+                for channel in range(3):
+                    thread = threading.Thread(target=blend_channel, args=(channel,))
+                    threads.append(thread)
 
-            for thread in threads:
-                thread.start()
+                for thread in threads:
+                    thread.start()
 
-            for thread in threads:
-                thread.join()
+                for thread in threads:
+                    thread.join()
+            else:
+                for channel in range(3):
+                    blend_channel(channel)
 
             return self.cache_target.clip(0, 1)
