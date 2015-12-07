@@ -31,3 +31,13 @@ def benchmark_default(algorithm="reference"):
                          join(EXAMPLES_ROOT, "brick-target.jpg"),
                          join(EXAMPLES_ROOT, "brick-mask.jpg"),
                          offset=[81, 137])
+    with log_timer("benchmark: window", level="info"):
+        fusion_from_file(algorithm, join(EXAMPLES_ROOT, "window.jpg"),
+                         join(EXAMPLES_ROOT, "window.jpg"),
+                         join(EXAMPLES_ROOT, "window-mask.jpg"),
+                         offset=[-1, -226])
+    with log_timer("benchmark: bear", level="info"):
+        fusion_from_file(algorithm, join(EXAMPLES_ROOT, "bear-target.jpg"),
+                         join(EXAMPLES_ROOT, "bear-source3.jpg"),
+                         join(EXAMPLES_ROOT, "bear-mask3.jpg"),
+                         offset=[0, 600])
