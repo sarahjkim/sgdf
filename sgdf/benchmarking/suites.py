@@ -17,27 +17,37 @@ def log_timer(name, level=None):
     logger("log_timer(%s):%.8fms", repr(name), 1000 * (after - before))
 
 
-def benchmark_default(algorithm="reference"):
+def benchmark_default(algorithm="reference", algorithm_kwargs=None):
+    """Runs some basic benchmarking cases."""
+
+    if algorithm_kwargs is None:
+        algorithm_kwargs = {}
+
     with log_timer("benchmark: easy", level="info"):
         fusion_from_file(algorithm, join(EXAMPLES_ROOT, "easy-source.jpg"),
                          join(EXAMPLES_ROOT, "easy-target.jpg"),
-                         join(EXAMPLES_ROOT, "easy-mask.jpg"))
+                         join(EXAMPLES_ROOT, "easy-mask.jpg"),
+                         algorithm_kwargs=algorithm_kwargs)
     with log_timer("benchmark: gradient", level="info"):
         fusion_from_file(algorithm, join(EXAMPLES_ROOT, "gradient-source.png"),
                          join(EXAMPLES_ROOT, "gradient-target.png"),
-                         join(EXAMPLES_ROOT, "gradient-mask.png"))
+                         join(EXAMPLES_ROOT, "gradient-mask.png"),
+                         algorithm_kwargs=algorithm_kwargs)
     with log_timer("benchmark: brick", level="info"):
         fusion_from_file(algorithm, join(EXAMPLES_ROOT, "brick-source.jpg"),
                          join(EXAMPLES_ROOT, "brick-target.jpg"),
                          join(EXAMPLES_ROOT, "brick-mask.jpg"),
-                         offset=[81, 137])
+                         offset=[81, 137],
+                         algorithm_kwargs=algorithm_kwargs)
     with log_timer("benchmark: window", level="info"):
         fusion_from_file(algorithm, join(EXAMPLES_ROOT, "window.jpg"),
                          join(EXAMPLES_ROOT, "window.jpg"),
                          join(EXAMPLES_ROOT, "window-mask.jpg"),
-                         offset=[-1, -226])
+                         offset=[-1, -226],
+                         algorithm_kwargs=algorithm_kwargs)
     with log_timer("benchmark: bear", level="info"):
         fusion_from_file(algorithm, join(EXAMPLES_ROOT, "bear-target.jpg"),
                          join(EXAMPLES_ROOT, "bear-source3.jpg"),
                          join(EXAMPLES_ROOT, "bear-mask3.jpg"),
-                         offset=[0, 600])
+                         offset=[0, 600],
+                         algorithm_kwargs=algorithm_kwargs)

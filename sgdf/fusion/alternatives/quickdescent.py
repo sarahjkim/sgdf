@@ -15,7 +15,7 @@ LOG = logging.getLogger(__name__)
 
 
 class QuickdescentFusion(ReferenceFusion):
-    def __init__(self):
+    def __init__(self, epsilon=0.00005, max_iterations=200):
         """
         An algorithm for the Gradient Domain Fusion problem, using gradient descent implemented
         natively.
@@ -30,8 +30,8 @@ class QuickdescentFusion(ReferenceFusion):
         self.cache_source_bounds = None
         self.cache_target_bounds = None
 
-        self.epsilon = 0.00005
-        self.max_iterations = 200
+        self.epsilon = epsilon
+        self.max_iterations = max_iterations
 
     def update_blend(self, mask_ndarray):
         assert mask_ndarray.dtype == np.bool
