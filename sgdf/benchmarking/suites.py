@@ -53,7 +53,7 @@ def benchmark_default(algorithm="reference", algorithm_kwargs=None):
                          algorithm_kwargs=algorithm_kwargs)
     with log_timer("benchmark: penguin", level="info"):
         fusion_from_file(algorithm, join(EXAMPLES_ROOT, "penguin-target.jpg"),
-                         join(EXAMPLES_ROOT, "penguin-source.jpg"),
-                         join(EXAMPLES_ROOT, "penguin-mask.jpg"),
+                         join(EXAMPLES_ROOT, "penguin-source3.jpg"),
+                         join(EXAMPLES_ROOT, "penguin-mask3.jpg"),
                          offset=[356, 287],
                          algorithm_kwargs=algorithm_kwargs)
