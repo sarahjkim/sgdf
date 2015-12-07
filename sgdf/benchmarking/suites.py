@@ -23,15 +23,15 @@ def benchmark_default(algorithm="reference", algorithm_kwargs=None):
     if algorithm_kwargs is None:
         algorithm_kwargs = {}
 
-    with log_timer("benchmark: easy", level="info"):
-        fusion_from_file(algorithm, join(EXAMPLES_ROOT, "easy-source.jpg"),
-                         join(EXAMPLES_ROOT, "easy-target.jpg"),
-                         join(EXAMPLES_ROOT, "easy-mask.jpg"),
-                         algorithm_kwargs=algorithm_kwargs)
     with log_timer("benchmark: gradient", level="info"):
         fusion_from_file(algorithm, join(EXAMPLES_ROOT, "gradient-source.png"),
                          join(EXAMPLES_ROOT, "gradient-target.png"),
                          join(EXAMPLES_ROOT, "gradient-mask.png"),
+                         algorithm_kwargs=algorithm_kwargs)
+    with log_timer("benchmark: easy", level="info"):
+        fusion_from_file(algorithm, join(EXAMPLES_ROOT, "easy-source.jpg"),
+                         join(EXAMPLES_ROOT, "easy-target.jpg"),
+                         join(EXAMPLES_ROOT, "easy-mask.jpg"),
                          algorithm_kwargs=algorithm_kwargs)
     with log_timer("benchmark: brick", level="info"):
         fusion_from_file(algorithm, join(EXAMPLES_ROOT, "brick-source.jpg"),
@@ -45,15 +45,15 @@ def benchmark_default(algorithm="reference", algorithm_kwargs=None):
                          join(EXAMPLES_ROOT, "window-mask.jpg"),
                          offset=[-1, -226],
                          algorithm_kwargs=algorithm_kwargs)
-    with log_timer("benchmark: bear", level="info"):
-        fusion_from_file(algorithm, join(EXAMPLES_ROOT, "bear-target.jpg"),
-                         join(EXAMPLES_ROOT, "bear-source3.jpg"),
-                         join(EXAMPLES_ROOT, "bear-mask3.jpg"),
-                         offset=[0, 600],
-                         algorithm_kwargs=algorithm_kwargs)
     with log_timer("benchmark: penguin", level="info"):
-        fusion_from_file(algorithm, join(EXAMPLES_ROOT, "penguin-target.jpg"),
-                         join(EXAMPLES_ROOT, "penguin-source3.jpg"),
+        fusion_from_file(algorithm, join(EXAMPLES_ROOT, "penguin-source3.jpg"),
+                         join(EXAMPLES_ROOT, "penguin-target.jpg"),
                          join(EXAMPLES_ROOT, "penguin-mask3.jpg"),
                          offset=[356, 287],
+                         algorithm_kwargs=algorithm_kwargs)
+    with log_timer("benchmark: bear", level="info"):
+        fusion_from_file(algorithm, join(EXAMPLES_ROOT, "bear-source3.jpg"),
+                         join(EXAMPLES_ROOT, "bear-target.jpg"),
+                         join(EXAMPLES_ROOT, "bear-mask3.jpg"),
+                         offset=[0, 600],
                          algorithm_kwargs=algorithm_kwargs)
