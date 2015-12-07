@@ -20,7 +20,7 @@ def main():
                         help="Wait for keyboard input (useful for debugging)")
     parser.add_argument("-a", "--algorithm", default="reference",
                         help="Fusion algorithm to use")
-    parser.add_argument("-X", "--extra", nargs="*", default=[],
+    parser.add_argument("-X", "--extra", action="append", default=[],
                         help="Extra options for algorithm")
     parser.add_argument("-s", "--source", help="Source image path")
     parser.add_argument("-t", "--target", help="Target image path")
